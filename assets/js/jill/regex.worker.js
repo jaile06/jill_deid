@@ -2,18 +2,22 @@
 //   { regex, text }            one pattern (admin rule form): replies { hits, ms }
 //   { type: 'detect', text, rules } every rule in turn (jill/detect.js): replies { start: id } before each rule,
 //                              { done: id, cands } after it. Built-in rules travel as { id, retention } and are
-//                              rebuilt here with their check-digit validators, which postMessage cannot carry.
+//                              rebuilt here with their check-digit validators, which postMessage cannot carry;
+//                              `hosts` is the personal-page list the url rule checks (spec §5.2). Each rule also
+//                              covers the percent-encoded parts of bare URLs (spec §5.3).
 self.onmessage = async ({ data }) => {
   if (data.type === 'detect') {
-    const [{ BUILTIN_PATTERNS }, { scanPattern }] = await Promise.all([
+    const [{ BUILTIN_PATTERNS, setPersonalHosts }, { scanPattern }, { encodedTextCandidates }] = await Promise.all([
       import('../upstream/core/patterns.js'),
       import('../upstream/core/detector.js'),
+      import('./uri-scan.js'),
     ]);
+    setPersonalHosts(data.hosts ?? []);
     const builtin = new Map(BUILTIN_PATTERNS.map((p) => [p.id, p]));
     for (const r of data.rules) {
       self.postMessage({ start: r.id });
       const p = builtin.has(r.id) ? { ...builtin.get(r.id), retention: r.retention } : r;
-      self.postMessage({ done: r.id, cands: scanPattern(data.text, p) });
+      self.postMessage({ done: r.id, cands: [...scanPattern(data.text, p), ...encodedTextCandidates(data.text, p)] });
     }
     return;
   }

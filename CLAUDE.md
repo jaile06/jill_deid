@@ -1,6 +1,6 @@
 # jill_deid — AI 協作須知
 
-- **唯一事實來源**：`docs/spec.md`（規格書 v3.7）。與 convention 衝突以 spec 為準。
+- **唯一事實來源**：`docs/spec.md`（規格書 v3.8）。與 convention 衝突以 spec 為準。
 - 通用規範：`g:\我的雲端硬碟\note\Templates\開發範本\OpenSpec-XOOPS-convention.md`、`XOOPS-安全開發檢查清單.md`。
 - 一次只做一個 Phase（spec §8），每個 Phase 一個分支；合併前 `./check.ps1` 全過（含 headless Chrome 跑 `tests/browser/`，需本機站台），並跑 `node tools/e2e.mjs`（兩個佈景的實際流程＋HAR＋斷網）。
 - PHP：`E:\my_xoops274\core\php83\php.exe`；lint：`php D:/workspace/02_Tools/xoops-lint/xoops-lint.php .`
@@ -13,7 +13,8 @@
 | 1b 前端驗證 | 已合併 main（2026-11-10）：上游介面掛載於佈景、P0／P1 修補、瀏覽器測試 19/19、`tools/e2e.mjs` 兩個佈景 PASS（五種格式＋OCR、ZIP、HAR、斷網第二份 PDF） |
 | 2 後台 | 已合併 main（2026-11-10）：Rule、Preset、Config、後台樣板、規則包；使用者已更新模組並在後台操作確認 |
 | 3a 前端基礎 | 已合併 main（2026-11-10）：單一 Worker 偵測（看門狗、fail closed）、機構規則併入、情境下拉與策略對照、欄首標籤偵測；瀏覽器 47/47＋3/3、e2e 兩個佈景 PASS（名冊 12/12）。上游測試移植移到 4d |
-| 3b-1 URI 核心 | 下一步 |
+| 3b-1 URI 核心 | 已合併 main（2026-11-10）：`jill/uri-scan.js`（`scanUri`、`restoreUri`、文字層編碼片段）、內建規則 16 `url`、`docs/marker-in-uri.md`；瀏覽器 62/62＋3/3、e2e 兩個佈景 PASS |
+| 3b-2 Markdown | 下一步 |
 
 ## 本模組特有的鐵則（spec 摘要，細節回 spec 查）
 
@@ -35,5 +36,6 @@
 - （Phase 1b）佈景的 Google 翻譯小工具會把整頁送出，本模組頁已在 `index.php` 拿掉；新佈景要確認同類小工具。HAR 時間比對要用毫秒（`strtotime` 只到秒，會誤判）。
 - （Phase 2）命令列載入 XOOPS 時，`include/common.php` 以**工作目錄**有沒有 `xoops_version.php` 判斷是否在模組內；在模組目錄執行會渲染「模組不存在」頁並 exit。測試先 `chdir(sys_get_temp_dir())`。
 - （Phase 2）headless Chrome 的 `--virtual-time-budget` 會快轉計時器，Worker 看門狗會在 Worker 回應前觸發，測試時好時壞；瀏覽器測試一律用 `tools/browser-tests.mjs`（真實時間）。
-- （Phase 2）含反斜線的內容（regex、JSON、命名空間）用 Write／Edit 工具寫檔，不要經 shell heredoc 或 `node -e`，反斜線會被吃掉。
+- （Phase 2、3b-1 再犯）含反斜線的內容（regex、JSON、命名空間）用 Write／Edit 工具寫檔，不要經 shell heredoc、`node -e` 或 `python -` heredoc，反斜線會被吃掉或改變。
 - （Phase 3a）**每次偵測都新建 Worker 會讓斷網失敗**（同 pdf.js 的問題）：`no-cache` 下新 Worker 要重抓模組。長駐的東西（Worker）整頁共用；e2e 的斷網項目會抓到。
+- （Phase 3b-1）**裸網址 regex 不能用排除式字元類**：`[^\s<>"']+` 會把緊接在網址後的中文（「。另見」）吞進網址，一併整條遮蔽。中文句子常不空格，網址只收 RFC 3986 字元。
