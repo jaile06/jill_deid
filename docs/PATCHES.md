@@ -13,6 +13,7 @@
 | P1-3 | `core/pattern-store.js` | `STORAGE_KEY` 改 `jill_deid.patternConfig.v1`；`setOrgPatterns()`，`getEffectivePatterns()` 依「內建 → 機構 → 個人」合併，機構規則非 locked 可停用、個人保留設定優先 | 機構規則加入偵測（spec §4、§7） | `presets.test.js` |
 | P1-4 | `ui/process-view.js` | 偵測改呼叫 `jill/detect.js`（async：載入、重新偵測、規則變更同步）；`setPresets()`、情境下拉；`effectiveRetention` 依 §3.4（部分保留時機構類別用規則自己的保留方式、自訂加入情境）；類別表的預設值含情境；略過規則時下載／複製前確認 | spec §3.3、§3.4、§6.1 新增 1 | `presets.test.js`、e2e |
 | P1-5 | `core/patterns.js`、`core/retention.js`、`core/types.js`、`core/detector.js` | 內建規則 16 `url`（`URL_CATEGORY`、`URL_REGEX`、`trimUrl`、`setPersonalHosts`／`getPersonalHosts`、`personalUrlLength`）；`standardSplit` 的 `網址` 保留到網站根；`CATEGORIES` 加 `網址`；`toItems`／`resplitItems` 尊重候選的 `fixed`（一律整段隱藏） | 個人頁網址（spec §5.2）；文字層裸網址的編碼片段整段隱藏才能逐位元組還原（spec §5.3，`docs/marker-in-uri.md`） | `uri.test.js` |
+| P1-6 | `ui/process-view.js`、`formats/batch.js` | `redact(d, style)` 取代 `applyRedactions(d.doc.text, d.items, …)`（下載文件、編碼表、複製、合併編碼表、打包），以目前的輸出模式、標記、`hyperlinkMode` 呼叫 `scanUri` 改寫文字內的連結目標；`buildArchive` 的 entry 可帶 `redact` | Markdown／貼上文字的連結網址不進一般偵測，必須在每個輸出出口一致改寫（spec §5.5） | `markdown.test.js`、e2e `links.md` |
 | P1-1 | `formats/pdf.js` | `GlobalWorkerOptions.workerPort` 整頁共用一個 module worker，取代 `workerSrc` | 每份文件重抓 worker，`no-cache` 下斷網處理第二份 PDF 失敗（spec §4、§9.1） | `tools/e2e.mjs` 斷網項目 |
 
 ## 待辦

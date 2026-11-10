@@ -2,6 +2,8 @@
 import { CATEGORIES, MAX_FILE_BYTES } from '../core/types.js';
 import { addManualItem, resplitItems, toggleItem } from '../core/detector.js';
 import { detectDocument } from '../../jill/detect.js'; // jill_deid patch (PATCHES.md P1-4): detection in a worker
+import { redactWithLinks, textLinks } from '../../jill/links/markdown.js'; // jill_deid patch (PATCHES.md P1-6)
+import { scanUri } from '../../jill/uri-scan.js';
 import { applyRedactions, blankOut, isPartial, mergeMappings, outputFor, previewLabel,                  } from '../core/redactor.js';
 import { CodeBook, parseMarkers } from '../core/codes.js';
 import { parseMapping, serializeMapping } from '../core/csv.js';
@@ -148,6 +150,18 @@ function applyOutputMode(d          )       {
   resplitItems(d.items, d.book, (it) => effectiveRetention(it, org));
 }
 
+/**
+ * jill_deid patch (PATCHES.md P1-6): applyRedactions plus the link targets in the text (spec §5.1, §5.5), so every
+ * output — file, copy, mapping table, archive — rewrites the same links with the current settings.
+ */
+function redact(d, style = state.marker) {
+  const org = orgCategories();
+  const patterns = getEffectivePatterns();
+  return redactWithLinks(d.doc.text, d.items, style, textLinks(d.doc), (uri) => scanUri(uri, patterns, d.book, {
+    retentionOf: (c) => effectiveRetention(c, org), hyperlinkMode: state.hyperlinkMode, markerStyle: style,
+  }));
+}
+
 function applyOutputModeToAll()       {
   for (const d of state.docs) {
     applyOutputMode(d);
@@ -177,7 +191,7 @@ const restorable = ()          => state.marker === 'code';
 const hasMergedTable = ()          => restorable() && (state.sharedCodes || state.imported !== null);
 
 function mergedMapping()                 {
-  return mergeMappings(state.imported?.entries ?? [], ...state.docs.map((d) => applyRedactions(d.doc.text, d.items).mapping));
+  return mergeMappings(state.imported?.entries ?? [], ...state.docs.map((d) => redact(d, 'code').mapping));
 }
 /** The mounted view, so changes made in other tabs can re-render it. */
 let viewRoot                     = null;
@@ -986,14 +1000,14 @@ function warnIfStale(partnerVer        , d          , partner        )       {
 }
 
 async function saveDoc(d          )                {
-  const { edits } = applyRedactions(d.doc.text, d.items, state.marker);
+  const { edits } = redact(d);
   const blob = await generateDocument(d.doc, edits);
   downloadBlob(blob, outputFileName(d.doc.fileName, 'deid'));
   d.docVer = d.version;
 }
 
 function saveCsv(d          )       {
-  const { mapping } = applyRedactions(d.doc.text, d.items);
+  const { mapping } = redact(d, 'code');
   downloadBlob(new Blob([serializeMapping(mapping)], { type: 'text/csv;charset=utf-8' }), mappingFileName(d.doc.fileName));
   d.csvVer = d.version;
 }
@@ -1043,7 +1057,7 @@ function downloadMerged()       {
 
 async function copyText(d          )                {
   if (!confirmSkipped([d])) return;
-  const { redactedText } = applyRedactions(d.doc.text, d.items, state.marker);
+  const { redactedText } = redact(d);
   try {
     await navigator.clipboard.writeText(redactedText);
     toast(restorable() ? '已複製去識別化文字（編碼表仍需另外下載才能還原）' : '已複製去識別化文字', 'success', 4000);
@@ -1057,7 +1071,7 @@ async function downloadAll(root             )                {
   if (!confirmSkipped(state.docs)) return;
   try {
     toast(`打包 ${state.docs.length} 個檔案中…`, 'info', 3000);
-    const { blob } = await buildArchive(state.docs.map((d) => ({ doc: d.doc, items: d.items })), hasMergedTable() ? mergedMapping() : undefined, state.marker);
+    const { blob } = await buildArchive(state.docs.map((d) => ({ doc: d.doc, items: d.items, redact: (style) => redact(d, style) })),hasMergedTable() ? mergedMapping() : undefined, state.marker);
     for (const d of state.docs) {
       d.docVer = d.version;
       d.csvVer = d.version;

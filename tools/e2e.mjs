@@ -18,7 +18,10 @@ const out = join(tmpdir(), 'jill_deid_e2e');
 const samples = (names) => names.map((n) => join(root, 'assets', 'samples', n));
 // roster.xlsx: fictitious roster with numeric 座號/學號 and surnames off the list; 12 items only with column labels (spec §6.5)
 const ROSTER = join(root, 'tests', 'browser', 'fixtures', 'roster.xlsx');
-const FIRST = [...samples(['contract.docx', 'quotation.pdf', 'scanned.pdf', 'customers.xlsx', 'meeting-notes.md', 'support-email.txt']), ROSTER];
+// links.md: fictitious Markdown links; its output in the archive must hold none of LINK_LEAKS (spec §5.5)
+const LINKS = join(root, 'tests', 'browser', 'fixtures', 'links.md');
+const LINK_LEAKS = ['A123456789', '%E5%B0%8F%E6%98%8E', '小明', 'wang.xm', 'wang.xiaoming'];
+const FIRST = [...samples(['contract.docx', 'quotation.pdf', 'scanned.pdf', 'customers.xlsx', 'meeting-notes.md', 'support-email.txt']), ROSTER, LINKS];
 const OFFLINE = samples(['contract.pdf']);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -137,6 +140,15 @@ async function runTheme(theme) {
     await evaluate(`[...document.querySelectorAll('#jill-deid-app button')].find((b) => b.textContent.startsWith('打包下載全部')).click()`);
     for (let i = 0; i < 40 && !readdirSync(join(dir, 'downloads')).some((f) => f.endsWith('.zip')); i++) await sleep(500);
     const zip = readdirSync(join(dir, 'downloads')).find((f) => f.endsWith('.zip'));
+    let linksOut = '';
+    try {
+      linksOut = execFileSync('C:/Windows/System32/tar.exe', ['-xOf', join(dir, 'downloads', zip), 'links.deid.md'], { encoding: 'utf8' });
+    } catch {
+      linksOut = '';
+    }
+    const linkLeaks = LINK_LEAKS.filter((v) => linksOut.includes(v));
+    // rewritten or stripped depends on the site's default preset (hyperlink_mode); either way nothing may remain
+    const linksOk = linksOut.includes('學籍') && linkLeaks.length === 0;
 
     offline = true;
     await send('Network.emulateNetworkConditions', OFFLINE_ON);
@@ -161,12 +173,13 @@ async function runTheme(theme) {
 
     ws.close();
     const rosterOk = files.some((f) => f.startsWith('roster.xlsx') && f.includes('12 / 12'));
-    const ok = rosterOk && shownTheme === theme && !translate && files.length === FIRST.length && !!zip && offlineOk && harOk && problems.length === 0;
+    const ok = rosterOk && linksOk && shownTheme === theme && !translate && files.length === FIRST.length && !!zip && offlineOk && harOk && problems.length === 0;
     console.log([
       `== ${theme}: ${ok ? 'PASS' : 'FAIL'}`,
       `theme in page: ${shownTheme}; translate widget: ${translate ? 'PRESENT' : 'none'}`,
       ...files.map((f) => `  ${f}`),
       `roster column detection: ${rosterOk ? 'ok' : 'FAILED'}`,
+      `markdown links: ${linksOk ? 'ok' : `FAILED ${linkLeaks.join(', ') || 'output missing'}`}`,
       `zip: ${zip ? `${zip} (${statSync(join(dir, 'downloads', zip)).size} bytes)` : 'MISSING'}`,
       `offline second PDF: ${offlineOk ? 'ok' : `FAILED ${offlineError}`}`,
       harReport.trim(),
