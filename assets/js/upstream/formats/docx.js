@@ -40,7 +40,9 @@ function extractPart(path        , doc          , offset        )               
   const nodes            = [];
   const segments            = [];
   const paragraphs                        = [];
-  const partKind                              = /header/.test(path) ? 'header' : /footer/.test(path) ? 'footer' : 'body';
+  // jill_deid patch (PATCHES.md P1-11): notes and comments are boxed and labelled in the preview, not mixed into the body
+  const partKind = /header/.test(path) ? 'header' : /footer/.test(path) ? 'footer'
+    : /footnotes/.test(path) ? 'footnote' : /endnotes/.test(path) ? 'endnote' : /comments/.test(path) ? 'comment' : 'body';
   const tableStack                                             = [];
   let text = '';
 

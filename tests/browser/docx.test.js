@@ -184,3 +184,21 @@ describe('DOCX fixture made by Office, URLs rewritten (not stripped)', () => {
     expect(await leaks(zip, ['A123456789', '小明', 'wang.xm', 'wang.xiaoming', 'chen.ml', '林志明', '測試作者'])).toEqual([]);
   });
 });
+
+describe('DOCX preview parts (PATCHES.md P1-11)', () => {
+  it('footnotes and comments are boxed and labelled, not mixed into the body; separators leave no blank lines', async () => {
+    const { renderDocumentPreview } = await import('../../assets/js/upstream/ui/preview.js');
+    const doc = await parseDocx(new File([await (await fetch('fixtures/links.docx')).blob()], 'links.docx'));
+    const box = document.createElement('div');
+    renderDocumentPreview(box, doc, []);
+    const part = (kind) => box.querySelector(`.doc-part-${kind}`);
+    expect(part('footnote').querySelector('.doc-part-label').textContent).toBe('註腳');
+    expect(part('footnote').textContent).toContain('身分證 A123456789');
+    expect(part('comment').querySelector('.doc-part-label').textContent).toBe('註解');
+    expect(part('comment').textContent).toContain('請林志明確認');
+    const body = [...box.querySelector('.doc-page').children].filter((c) => !c.classList.contains('doc-part')).map((c) => c.textContent);
+    expect(body.join('|')).not.toContain('A123456789');
+    expect(body.join('|')).not.toContain('林志明');
+    expect([...part('footnote').querySelectorAll('p, .doc-p, div:not(.doc-part-label)')].every((p) => p.textContent.trim() !== '')).toBe(true);
+  });
+});

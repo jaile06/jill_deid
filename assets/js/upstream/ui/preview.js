@@ -68,11 +68,14 @@ function renderPlain(container             , doc                , decos         
 // ---------------------------------------------------------------------------------------
 function renderDocx(container             , doc                , decos              , paragraphs                       )       {
   const page = el('div', { class: 'doc-page' });
-  const parts                                = ['header', 'body', 'footer'];
+  // jill_deid patch (PATCHES.md P1-11): footnotes, endnotes and comments get their own labelled box, like the header
+  // and footer; their empty paragraphs (Word's footnote separators) are left out.
+  const LABELS = { header: '頁首', footnote: '註腳', endnote: '章節附註', footer: '頁尾', comment: '註解' };
+  const parts = ['header', 'body', 'footnote', 'endnote', 'footer', 'comment'];
   for (const part of parts) {
-    const list = paragraphs.filter((p) => p.part === part);
+    const list = paragraphs.filter((p) => p.part === part && (part === 'body' || part === 'header' || part === 'footer' || p.end > p.start));
     if (list.length === 0) continue;
-    const host = part === 'body' ? page : el('div', { class: `doc-part doc-part-${part}` }, el('div', { class: 'doc-part-label' }, part === 'header' ? '頁首' : '頁尾'));
+    const host = part === 'body' ? page : el('div', { class: `doc-part doc-part-${part}` }, el('div', { class: 'doc-part-label' }, LABELS[part]));
     let i = 0;
     while (i < list.length) {
       const p = list[i];
