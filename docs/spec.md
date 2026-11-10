@@ -455,6 +455,15 @@ function restoreUri(uri: string, mapping: MappingEntry[]): { uri: string; missin
 
 **PDF**：輸出重建已滿足 INV-2。新增以 `page.getAnnotations()` 讀 `Link` 的 `url`、`rect`，`writable:false`，UI 顯示「此頁有含個資的連結，輸出時連結會移除」。輸出與還原都不重建連結。
 
+實作補充（v3.8，Phase 3b-5）：讀 `unsafeUrl`（原始目標；`url` 是 pdf.js 清理過的版本，非 http 的會是空值）。所有 PDF 連結的決定都是 `strip`；`scanUri` 有命中或有警示者另帶 `pdf` 警示，供 4a 顯示。H14 在瀏覽器以 pdf-lib 解碼輸出檔的所有物件檢查（等同 `qpdf --qdf` 展開；本機未安裝 qpdf）。
+
+**還原核心**（`assets/js/jill/links/restore.js`，Phase 3b-5）：`restoreDocument(doc, mapping)` 對解析後的去識別化檔：
+- 內文標記交給上游 `restore()`。
+- Markdown／TXT 的連結網址以 `restoreUri` 還原。
+- DOCX／XLSX 的 `doc.links`：目標以 `restoreUri` 還原，tooltip、display、公式名稱與 `<v>` 以 `restore()` 還原。
+
+產出的 `edits`、`links` 交給 `generateDocument`，寫回端與去識別化共用。還原頁（`ui/restore-view.js`）接上它屬 4c。
+
 **Markdown／貼上文字**（`assets/js/jill/links/markdown.js`）：辨識 `[text](url "title")`、`![alt](url)`、`<https://…>`、`<mailto:…>`、`[id]: url "title"`、`<a href="…">`、裸網址。
 
 - `text`、`alt`、`title` 走一般偵測；`url` 範圍走 §5.1，並**從一般偵測排除**，以免同一處被改兩次。

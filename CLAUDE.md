@@ -17,7 +17,8 @@
 | 3b-2 Markdown | 已合併 main（2026-11-10）：`jill/links/markdown.js`（連結網址排除一般偵測、輸出時 `scanUri` 改寫或 strip）、process-view `redact()` 統一輸出出口；瀏覽器 69/69＋3/3、e2e 兩個佈景 PASS（含 `links.md` 零殘留） |
 | 3b-3 DOCX | 已合併 main（2026-11-10）：`jill/links/docx.js`（rels 每處引用、欄位碼、tooltip、H7 新 rId）、殘留清除（Fallback、修訂、作者、people.xml、docProps）、註腳／尾註／註解納入掃描；H15 零殘留；瀏覽器 79/79＋3/3、e2e 兩個佈景 PASS（`links.docx` 經 Word 開檔驗證） |
 | 3b-4 XLSX | 已合併 main（2026-11-10）：`jill/links/xlsx.js`（工作表超連結、內部連結、`HYPERLINK()` 公式、calcChain）、rels 引擎抽成 `links/rels.js` 與 DOCX 共用、註解與作者清除、`detectShort`；瀏覽器 89/89＋3/3、e2e 兩個佈景 PASS（`links.xlsx` 經 Excel 開檔驗證） |
-| 3b-5 PDF＋還原核心 | 下一步 |
+| 3b-5 PDF＋還原核心 | 已合併 main（2026-11-10）：PDF Link 讀取（`writable:false`，一律 strip＋警示）、`jill/links/restore.js`（`restoreDocument`）；H12 Markdown 逐位元組、Word／Excel 範例檔還原一致，H14 解碼後無 `/URI`；瀏覽器 94/94＋3/3、e2e 兩個佈景 PASS |
+| 4a 去識別化頁 | 下一步 |
 
 ## 本模組特有的鐵則（spec 摘要，細節回 spec 查）
 

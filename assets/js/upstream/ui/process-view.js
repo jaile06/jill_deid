@@ -161,8 +161,8 @@ function redact(d, style = state.marker) {
   const decide = (uri) => scanUri(uri, patterns, d.book, {
     retentionOf: (c) => effectiveRetention(c, org), hyperlinkMode: state.hyperlinkMode, markerStyle: style,
   });
-  if (d.doc.format !== 'docx' && d.doc.format !== 'xlsx') return redactWithLinks(d.doc.text, d.items, style, textLinks(d.doc), decide);
-  // P1-7, P1-8: DOCX and XLSX links live outside the text; their texts (tooltips…) go through the normal scan
+  if (!['docx', 'xlsx', 'pdf'].includes(d.doc.format)) return redactWithLinks(d.doc.text, d.items, style, textLinks(d.doc), decide);
+  // P1-7–P1-9: DOCX, XLSX and PDF links live outside the text; their texts (tooltips…) go through the normal scan
   const plain = (s) => {
     const items = detectShort(s, patterns, d.book);
     resplitItems(items, d.book, (it) => effectiveRetention(it, org));
