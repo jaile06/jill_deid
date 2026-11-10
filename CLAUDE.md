@@ -23,3 +23,4 @@
 ## AI 犯過的錯（每個 Phase 結束時補）
 
 - （Phase 1a）maker 產出的 CRUD 含 `$$key`、GET 刪除、session 權限判斷，已整批移除；Phase 2 依 spec 手寫，不要從 git 歷史撈回來。
+- （Phase 1a）獨立頁不載入 XOOPS header.php，`XoopsTpl` 要自行 `require_once XOOPS_ROOT_PATH . '/class/template.php'`。
