@@ -1,0 +1,82 @@
+// One-time conversion of upstream data-deidentification src/**/*.ts into plain ES modules (spec §4).
+// Usage: node tools/strip-upstream.mjs <upstream-root> [<out-dir>]
+//   <out-dir> defaults to assets/js/upstream next to this tool. Needs Node >= 22.13 (stripTypeScriptTypes).
+// Not used at runtime; excluded from release by .gitattributes.
+import { stripTypeScriptTypes } from 'node:module';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { join, dirname, relative, resolve, posix } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const [upstream, outArg] = process.argv.slice(2);
+if (!upstream) {
+  console.error('usage: node tools/strip-upstream.mjs <upstream-root> [<out-dir>]');
+  process.exit(2);
+}
+const srcRoot = resolve(upstream, 'src');
+const outRoot = resolve(outArg ?? join(dirname(fileURLToPath(import.meta.url)), '../assets/js/upstream'));
+
+// Package specifier -> replacement. `rel` paths are relative to assets/ and turned into a path
+// relative to each output file; `global` means a classic <script> already set globalThis[name].
+const PACKAGES = {
+  'jszip': { global: 'JSZip' },
+  '@pdf-lib/fontkit': { global: 'fontkit' },
+  'libphonenumber-js': { global: 'libphonenumber' },
+  'pdf-lib': { rel: 'vendor/pdf-lib.esm.min.js' },
+  'pdfjs-dist': { rel: 'vendor/pdf.min.js' },
+  'tesseract.js': { rel: 'vendor/tesseract.esm.min.js' },
+};
+const ASSETS_JS = 'js/jill/assets.js';
+
+const walk = (dir) => readdirSync(dir).flatMap((n) => {
+  const p = join(dir, n);
+  return statSync(p).isDirectory() ? walk(p) : p.endsWith('.ts') ? [p] : [];
+});
+
+let files = 0;
+let relFixed = 0;
+for (const file of walk(srcRoot)) {
+  const relPath = relative(srcRoot, file).replaceAll('\\', '/').replace(/\.ts$/, '.js');
+  const outFile = join(outRoot, relPath);
+  // assets/js/upstream/<relPath> -> path back to assets/
+  const toAssets = posix.relative(posix.dirname(posix.join('js/upstream', relPath)), '.') || '.';
+  const fromAssets = (p) => `${toAssets}/${p}`;
+
+  let js = stripTypeScriptTypes(readFileSync(file, 'utf8'), { mode: 'strip' });
+
+  // Vite-only imports
+  js = js.replace(/^import\s+'\.\/styles\.css';\s*$/m, '');
+  js = js.replace(
+    /^import\s+(\w+)\s+from\s+'pdfjs-dist\/build\/pdf\.worker\.min\.mjs\?url';/m,
+    (_, name) => `const ${name} = \`\${assetsBase}vendor/pdf.worker.min.js\`;`,
+  );
+  const usesBase = /import\.meta\.env\.BASE_URL|\$\{assetsBase\}/.test(js);
+  js = js.replaceAll('import.meta.env.BASE_URL', 'assetsBase');
+
+  // Package imports
+  js = js.replace(/^import\s+(.+?)\s+from\s+'([^'.][^']*)';/gm, (line, what, spec) => {
+    const p = PACKAGES[spec];
+    if (!p) throw new Error(`${relPath}: unmapped package import '${spec}'`);
+    if (p.rel) return `import ${what} from '${fromAssets(p.rel)}';`;
+    // default or namespace import -> the global itself; named imports -> destructure
+    const binding = what.replace(/^\*\s+as\s+/, '');
+    return `const ${binding} = globalThis.${p.global};`;
+  });
+  js = js.replace(/import\('([^'.][^']*)'\)/g, (m, spec) => {
+    const p = PACKAGES[spec];
+    if (!p?.rel) throw new Error(`${relPath}: unmapped dynamic import '${spec}'`);
+    return `import('${fromAssets(p.rel)}')`;
+  });
+
+  // Relative specifiers get an explicit .js (browsers do no extension resolution)
+  js = js.replace(/((?:\bfrom\s+|\bimport\s*\(\s*|^import\s+)')(\.\.?\/[^']+?)(?<!\.js)'/gm, (_, pre, spec) => {
+    relFixed++;
+    return `${pre}${spec}.js'`;
+  });
+
+  if (usesBase) js = `import { assetsBase } from '${fromAssets(ASSETS_JS)}';\n${js}`;
+
+  mkdirSync(dirname(outFile), { recursive: true });
+  writeFileSync(outFile, js);
+  files++;
+}
+console.log(`converted ${files} files, ${relFixed} relative specifiers -> ${outRoot}`);

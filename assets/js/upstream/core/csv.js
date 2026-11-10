@@ -1,0 +1,123 @@
+                                            
+
+const BOM = '\uFEFF';
+const REQUIRED_HEADERS = ['code', 'category', 'original']         ;
+
+function quote(field        )         {
+  if (/[",\r\n]/.test(field)) return `"${field.replace(/"/g, '""')}"`;
+  return field;
+}
+
+const KEPT_HEADERS = ['kept_prefix', 'kept_suffix']         ;
+
+/** The kept_* columns are appended only when some row keeps characters, so fully hidden output is unchanged. */
+export function serializeMapping(entries                )         {
+  const kept = entries.some((e) => e.prefix || e.suffix);
+  const lines = [[...REQUIRED_HEADERS, ...(kept ? KEPT_HEADERS : [])].join(',')];
+  for (const e of entries) {
+    const fields = [e.code, e.category, e.original];
+    if (kept) fields.push(e.prefix ?? '', e.suffix ?? '');
+    lines.push(fields.map(quote).join(','));
+  }
+  return BOM + lines.join('\r\n') + '\r\n';
+}
+
+/** RFC 4180 tokenizer: returns rows of fields. Handles quoted fields with embedded newlines. */
+export function parseCsvRows(text        )             {
+  const rows             = [];
+  let row           = [];
+  let field = '';
+  let i = 0;
+  let inQuotes = false;
+  if (text.startsWith(BOM)) text = text.slice(1);
+
+  while (i < text.length) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i += 2;
+          continue;
+        }
+        inQuotes = false;
+        i++;
+        continue;
+      }
+      field += ch;
+      i++;
+      continue;
+    }
+    if (ch === '"') {
+      inQuotes = true;
+      i++;
+      continue;
+    }
+    if (ch === ',') {
+      row.push(field);
+      field = '';
+      i++;
+      continue;
+    }
+    if (ch === '\r' || ch === '\n') {
+      row.push(field);
+      field = '';
+      rows.push(row);
+      row = [];
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+      i++;
+      continue;
+    }
+    field += ch;
+    i++;
+  }
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows.filter((r) => !(r.length === 1 && r[0] === ''));
+}
+
+                                     
+                          
+                   
+ 
+
+export function parseMapping(text        )                     {
+  const errors           = [];
+  const rows = parseCsvRows(text);
+  if (rows.length === 0) return { entries: [], errors: ['CSV 為空'] };
+
+  const header = rows[0].map((h) => h.trim());
+  const idx                         = {};
+  header.forEach((h, i) => (idx[h] = i));
+  for (const h of REQUIRED_HEADERS) {
+    if (!(h in idx)) errors.push(`缺少必要欄位：${h}`);
+  }
+  if (errors.length) return { entries: [], errors };
+
+  const entries                 = [];
+  const seen = new Set        ();
+  rows.slice(1).forEach((r, n) => {
+    const code = (r[idx.code] ?? '').trim();
+    const category = r[idx.category] ?? '';
+    const original = r[idx.original] ?? '';
+    const lineNo = n + 2;
+    if (!code) {
+      errors.push(`第 ${lineNo} 列：code 為空`);
+      return;
+    }
+    if (seen.has(code)) {
+      errors.push(`第 ${lineNo} 列：編碼 ${code} 重複`);
+      return;
+    }
+    seen.add(code);
+    const entry               = { code, category, original };
+    const prefix = 'kept_prefix' in idx ? r[idx.kept_prefix] ?? '' : '';
+    const suffix = 'kept_suffix' in idx ? r[idx.kept_suffix] ?? '' : '';
+    if (prefix) entry.prefix = prefix;
+    if (suffix) entry.suffix = suffix;
+    entries.push(entry);
+  });
+  return { entries, errors };
+}
