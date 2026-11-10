@@ -59,3 +59,12 @@ $modversion['config'][] = [
         'onedrive.live.com', '1drv.ms', 'dropbox.com',
     ]),
 ];
+
+$modversion['config'][] = [
+    'name'        => 'column_labels',
+    'title'       => '_MI_JILLDEID_COLUMN_LABELS',
+    'description' => '_MI_JILLDEID_COLUMN_LABELS_DESC',
+    'formtype'    => 'textarea',
+    'valuetype'   => 'text',
+    'default'     => _MI_JILLDEID_COLUMN_LABELS_DEFAULT,
+];

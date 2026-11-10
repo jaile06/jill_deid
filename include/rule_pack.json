@@ -1,0 +1,7 @@
+[
+  { "title": "學號", "category": "學號", "pattern": "(?<=學號[:：\\s]*)1\\d{5,6}(?!\\d)", "retention": { "mode": "ends", "head": 3, "tail": 0 }, "sample_text": "學號 115001" },
+  { "title": "座號", "category": "座號", "pattern": "(?<=座號[:：\\s]*)\\d{1,2}(?!\\d)", "retention": { "mode": "none" }, "sample_text": "座號 3" },
+  { "title": "教職員編號", "category": "員編", "pattern": "(?<![A-Za-z0-9])[A-Z]\\d{6}(?!\\d)", "retention": { "mode": "none" }, "sample_text": "員編 A200038" },
+  { "title": "公文字號", "category": "文號", "pattern": "(?<=字第)\\d{10}[A-Z]?(?=號)", "retention": { "mode": "none" }, "sample_text": "教課（一）字第1140087197A號" },
+  { "title": "校務網址參數", "category": "學號", "pattern": "(?<=[?&](?:stu|sid|student_id)=)[^&#\\s]+", "retention": { "mode": "none" }, "sample_text": "?sid=112001" }
+]

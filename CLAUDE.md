@@ -11,7 +11,7 @@
 |---|---|
 | 1a 骨架 | 已合併 main |
 | 1b 前端驗證 | 已合併 main（2026-11-10）：上游介面掛載於佈景、P0／P1 修補、瀏覽器測試 19/19、`tools/e2e.mjs` 兩個佈景 PASS（五種格式＋OCR、ZIP、HAR、斷網第二份 PDF） |
-| 2 後台 | 下一步，分支 `phase-2` |
+| 2 後台 | 分支 `phase-2`：Rule、Preset、Config、後台樣板、規則包、§9.3 自動化測試全過；**待人工**：更新模組（讓 `column_labels` 設定生效）、登入後台確認 §9.3 第 5 項（GET／缺 token／非管理員被拒）與表單畫面 |
 
 ## 本模組特有的鐵則（spec 摘要，細節回 spec 查）
 
@@ -31,3 +31,6 @@
 - （Phase 1b）**Word 產生的測試檔會帶真實姓名**：作者、最後修改者、修訂者（`docProps`、`w:author`、`people.xml`）都取自登入的 Office 帳號，只改 `UserName` 無效。一律用 `tools/make-h15.ps1` 的作法（暫時開 `UseLocalUserInfo`＋虛構名稱，結束還原），提交前以 leak-check 搜尋真實姓名。
 - （Phase 1b）**佈景的網路字型是旁路外洩**：佈景從 Google Fonts 以 unicode-range 切片載入字型，本模組 CSS 只要指名同名字型（上游的 'Noto Sans TC'），瀏覽器就依文件內容去抓分片。CSS 只用系統字型；改佈景或 CSS 後跑 `node tools/e2e.mjs`。
 - （Phase 1b）佈景的 Google 翻譯小工具會把整頁送出，本模組頁已在 `index.php` 拿掉；新佈景要確認同類小工具。HAR 時間比對要用毫秒（`strtotime` 只到秒，會誤判）。
+- （Phase 2）命令列載入 XOOPS 時，`include/common.php` 以**工作目錄**有沒有 `xoops_version.php` 判斷是否在模組內；在模組目錄執行會渲染「模組不存在」頁並 exit。測試先 `chdir(sys_get_temp_dir())`。
+- （Phase 2）headless Chrome 的 `--virtual-time-budget` 會快轉計時器，Worker 看門狗會在 Worker 回應前觸發，測試時好時壞；瀏覽器測試一律用 `tools/browser-tests.mjs`（真實時間）。
+- （Phase 2）含反斜線的內容（regex、JSON、命名空間）用 Write／Edit 工具寫檔，不要經 shell heredoc 或 `node -e`，反斜線會被吃掉。
