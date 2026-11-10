@@ -1,6 +1,6 @@
 ---
 title: "XOOPS 模組開發規格書：文件去識別化工具（jill_deid）"
-version: 3.4
+version: 3.7
 created: 2026-11-06
 updated: 2026-11-10
 upstream: "https://github.com/dean9703111/data-deidentification @ 1f7b9298f94a9728cf6d181f84cfcce48c39d968（2026-10-16，MIT）"
@@ -36,8 +36,8 @@ related_entities:
 4. 上游程式碼取 frontmatter 所列 commit。§A 是已對照原始碼的事實，與實際程式不符時停下來回報。
 5. 一次只做一個 Phase（§8），通過該 Phase 驗收才進下一個。
 6. 標 `【待確認】` 的值先照草案實作並集中放置，不要因此停工；其餘未定義的行為一律提問，不要自行決定。
-7. **已定案，不要重新提議**（2026-11-06 使用者確認；2026-11-10 修訂前台）：前台走一般 XOOPS 流程、套佈景，不做獨立頁、不送 CSP（§6.1）；`mask_whole_url` 延後；基準為 XOOPS 2.7.4、PHP 8.3，不支援 2.5.11；資料表用 MyISAM；校務資料涵蓋學號、座號、員編、文號、身分證號、姓名、EMAIL（§6.4）；骨架由 `tad_xmod_maker` 產生；前台為 PHP＋原生 JS，開發與上線都不用 Node 建置（§4）。
-8. §A 的路徑與行號指上游 TypeScript 原始碼；本模組對應檔案是 `assets/js/upstream/` 下的同名 `.js`。
+7. **已定案，不要重新提議**（2026-11-06 使用者確認；2026-11-10 修訂前台）：前台走一般 XOOPS 流程、套佈景，不做獨立頁、不送 CSP（§6.1）；**前台直接沿用上游介面 `ui/`、`styles.css` 與範例檔，只由轉換工具做佈景相容調整；不用 `main.ts`**（§4、§6.1，v3.7）；`mask_whole_url` 延後；基準為 XOOPS 2.7.4、PHP 8.3，不支援 2.5.11；資料表用 MyISAM；校務資料涵蓋學號、座號、員編、文號、身分證號、姓名、EMAIL（§6.4）；骨架由 `tad_xmod_maker` 產生；前台為 PHP＋原生 JS，開發與上線都不用 Node 建置（§4）。**v3.6（2026-11-10）使用者核准**：上游 P0 修補（DOCX offset、XLSX 數值格、`resolveOverlaps` 效能，§4）；偵測整段在單一 module worker（§3.3）；vendor 改由用到的模組自行 import（§4）；欄首標籤偵測（§6.5）；規則包修正（§6.4）。**v3.7（2026-11-10）使用者決定**：上游介面功能齊全（README「操作流程」步驟 1–7），改回沿用上游 `ui/` 與範例檔，取代 v3.5 的「介面自寫」；本模組新增功能以修補方式加在上游 `ui/`；xbootstrap5 下 TadTools 的警告不修（§9.1）。
+8. §A 的路徑與行號指上游 TypeScript 原始碼；`core/`、`formats/`、`ui/` 對應本模組 `assets/js/upstream/` 下的同名 `.js`；`styles.css` 對應轉換工具產生的 `assets/css/upstream.css`。
 
 ---
 
@@ -46,22 +46,24 @@ related_entities:
 | 項目 | 事實 | 位置 |
 |---|---|---|
 | 技術棧 | Vite 8（Node `^20.19 \|\| >=22.12`）、TypeScript 7、無框架、vitest＋jsdom，33 個測試檔 | `package.json` |
-| 內建規則 | 15 條。`tw` 7 條：`zh-name tw-id tw-mobile tw-landline tw-address tw-company tw-tax-id`；`intl` 8 條：`email us-ssn intl-phone credit-card iban ipv4 ipv6 dob`。可含 `validate` 函式（檢核碼），因此不能傳進 Worker | `core/patterns.ts` |
+| 內建規則 | 15 條。`tw` 7 條：`zh-name tw-id tw-mobile tw-landline tw-address tw-company tw-tax-id`；`intl` 8 條：`email us-ssn intl-phone credit-card iban ipv4 ipv6 dob`。可含 `validate` 函式（檢核碼），無法經 `postMessage` 傳送；module worker 可直接 import 本檔（§3.3） | `core/patterns.ts` |
 | 類別 | `CATEGORIES` 是封閉清單，型別也是 union；UI 用它產生下拉選單與類別統計（`process-view.ts:597,664,843`），不在清單內的類別不會出現在統計與批次取消 | `core/types.ts` |
 | 標記 | `[類別:6碼小寫hex]`，regex `\[([^\[\]:]{1,10}):([0-9a-f]{6})\]` | `core/codes.ts` |
 | 編碼共用 | `CodeBook` 鍵為 `類別:head:tail:原值`。同值但保留長度不同，編碼就不同 | `core/codes.ts` |
 | CSV | `code,category,original[,kept_prefix,kept_suffix]`；`original` 只存被隱藏的部分。還原只以 `code` 查表 | `core/csv.ts`、`core/restorer.ts` |
-| 偵測 | `detect(text, patterns, book)` 為**同步**函式，在主執行緒執行；重疊時最長者優先（`resolveOverlaps` 未 export）。呼叫點：`process-view.ts:239,279` | `core/detector.ts` |
+| 偵測 | `detect(text, patterns, book)` 為**同步**函式，在主執行緒執行；重疊時最長者優先（`resolveOverlaps` 未 export）。呼叫點：`process-view.ts:239,279`。**`resolveOverlaps` 為 O(n²)**：實測 5,000 列名冊 239 ms、20,000 列 9.6 s（主執行緒凍結），8.2 萬候選單此函式 3.3 s（§4 修補） | `core/detector.ts` |
 | 管線 | 全部以 `LoadedDocument.text` 的 **offset** 運作（`RedactionItem.start/end`、`TextEdit`）。超連結 URI 不在 `text` 裡，**現行管線碰不到** | `core/types.ts` |
-| 輸出模式 | `OutputMode = 'code'（全部隱藏）\|'preview'\|'custom'`；`MarkerStyle = 'code'\|'label'\|'blank'`。`preview` 對所有類別套 `standardSplit`，未知類別預設露出第 1 字；`custom` 為 `overrides[類別] ?? it.retention`，未設定則全部隱藏 | `ui/process-view.ts:101-111` |
+| 輸出模式 | `OutputMode = 'code'（全部隱藏）\|'preview'\|'custom'`；`MarkerStyle = 'code'\|'label'\|'blank'`。`preview` 對所有類別套 `standardSplit`，未知類別預設露出第 1 字；`custom` 為 `overrides[類別] ?? it.retention`，未設定則全部隱藏。這段邏輯在 UI 層（本模組沿用），§3.4 策略對照以修補方式加在這裡 | `ui/process-view.ts:101-111` |
 | 個人規則 | `localStorage` key `deid.patternConfig.v1`：`{version, disabledBuiltins, customPatterns, retention?}` | `core/pattern-store.ts` |
-| 上限 | `MAX_FILES = 10`、`MAX_FILE_BYTES = 100MB` | `process-view.ts:16`、`types.ts` |
-| 資產路徑 | `BASE_URL`（`./`）以 **document 網址**解析，共 3 處：`pdf.ts:14` 字型、`ocr.ts:605` OCR、`samples.ts:11` 範例 | 見左 |
-| DOCX | 只解析 `document.xml`、`header*`、`footer*` 的 `<w:t>`。**`mc:Fallback` 與 `w:del` 被跳過，內容原樣留在輸出檔** | `formats/docx.ts` |
-| XLSX | 只處理 `t="s"`、`inlineStr` 儲存格；公式快取（`t="str"`）不讀；未被引用的 sharedStrings 已會清空 | `formats/xlsx.ts` |
+| 上限 | `MAX_FILES = 10`（UI 層）、`MAX_FILE_BYTES = 100MB` | `process-view.ts:16`、`types.ts` |
+| 資產路徑 | `BASE_URL`（`./`）以 **document 網址**解析，共 3 處：`pdf.ts:14` 字型、`ocr.ts:605` OCR、`samples.ts:11` 範例（沿用上游範例清單與 `assets/samples/`）；轉換後皆為 `assetsBase` | 見左 |
+| DOCX | 只解析 `document.xml`、`header*`、`footer*` 的 `<w:t>`。**`mc:Fallback` 與 `w:del` 被跳過，內容原樣留在輸出檔**。**輸出時以第一個 `<w:t>` 的位置當 part 起點**：part 開頭有空段落、`<w:tab/>`、`<w:br/>` 時替換位置整體錯一格，實測輸出 `身分證[身分證:x]9[姓名:y]明`（末碼、末字外洩），**預覽卻正確**（§4 修補） | `formats/docx.ts` |
+| XLSX | 只處理 `t="s"`、`inlineStr` 儲存格；**數值儲存格（無 `t` 或 `t="n"`）不讀**，名冊的學號、座號原值留在輸出檔（§4 修補）；公式快取（`t="str"`）不讀；未被引用的 sharedStrings 已會清空 | `formats/xlsx.ts` |
+| 版面資訊 | `LoadedDocument.layout`：XLSX 每格有 `row`、`col`（`sheets[].cells`）；DOCX 段落有 `table:{id,row,col}`（`paragraphs[]`）。§6.5 用 | `formats/xlsx.ts`、`docx.ts` |
 | PDF | 以 `PDFDocument.create()` 重建，原 Annotation、Outline、Info 不會帶出 | `formats/pdf.ts` |
 | TXT／MD | 整段純文字，沒有連結語法意識 | `formats/plaintext.ts` |
-| UI 入口 | `main.ts` 匯入即 `mount()`，內含 `h1`、作者社群連結、`innerHTML`、FAQ dialog，**只能取代，不能包裝**。各分頁用 `h2` | `src/main.ts` |
+| UI 入口 | `main.ts` 匯入即 `mount()`，內含 `h1`、作者社群連結、`innerHTML`、FAQ dialog，**只能取代，不能包裝**。本模組以 `jill/main.js` 取代。各分頁用 `h2`、`h3`；`ui/*.js` 有 3 處原生 `confirm()`、寫死中文，**沒有 `innerHTML`**；7 處把元素掛在 `<body>`（tooltip、toast、處理中遮罩、提示 dialog、OCR 畫面、圈選浮窗、複製用 textarea）。`styles.css` 含 `:root`（`font-size: 15px`）、`*`、`body`、`h1`–`h3` 全域選擇器（Phase 1b 實測：套佈景時 255 個佈景元素中 230 個字級被改）。佈景 Bootstrap 有 10 個同名 class（`.active .badge .btn .btn-danger .btn-primary .mark .small .table .toast .tooltip`），其中 `.toast:not(.show)` 被隱藏、`.tooltip` 透明度 0。處理方式見 §4 轉換與 §6.1 | `src/main.ts`、`src/ui/`、`src/styles.css` |
+| UI 對 core 的依賴 | `core/`、`formats/` 不 import `ui/`（已驗證），UI 層可整層拿掉 | — |
 | OCR | 已指向同站資產，但 `tesseract.js` 程式內仍有 jsDelivr 預設網址字串（有傳路徑時不會連線）；預設以 blob URL 啟動 worker | `formats/ocr.ts:605-612` |
 
 ## B. XOOPS 基準事實（`E:\my_xoops274\www` 已驗證）
@@ -73,7 +75,7 @@ related_entities:
 | Smarty | 沒有開啟自動跳脫，輸出須明寫 `\|escape`。`nofilter` 語法有效但多餘，JSON 區塊直接輸出變數即可。未註冊的 PHP 函式當 modifier 會觸發 Deprecated |
 | `Xmf\Request::getString` | **會破壞 regex**：實測 `(?<!\d)1` → `(?!\d)1`（語意反轉）、`(?<y>\d{4})` → `(?\d{4})`、`a<b>c` → `ac`。`Request::getText` 三者皆保留 |
 | 模組存取權 | `include/common.php` 已自動檢查 `module_read`，模組內不必重寫 |
-| 佈景 | `xswatch5`、`xbootstrap5` 的 `theme.tpl` 含行內 `<script>`；SweetAlert 也以行內 JS 輸出。套嚴格 CSP 會壞 |
+| 佈景 | `xswatch5`、`xbootstrap5` 的 `theme.tpl` 含行內 `<script>`；SweetAlert 也以行內 JS 輸出。套嚴格 CSP 會壞。**頁面載入時有第三方 GET**：xswatch5 的 Bootswatch 版型 CSS `@import` Google Fonts，school2022 預設設定載入 Google Fonts（§0 INV-1） |
 | `SweetAlert::render` | 確認後一律 `location.href`（GET），**無法滿足本模組的 POST 要求**，見 §6.2 |
 | `FormValidator` | `__construct($id='', $show_jquery=true)`、`render($Position='topRight')`。須寫 `(new FormValidator('#f', true))->render();`，PHP 8.4 以前不接受省略括號 |
 | `Utility` | `xoops_security_check($file='', $line='', $redirect_to='')`；`token_form($mode='assign')`；`web_error($sql, $file='', $line='', $force=false)`；`getPageBar($sql, $show_num, $page_list, ...)` |
@@ -88,7 +90,7 @@ related_entities:
 2. **誰能碰什麼**：有 `module_read` 的群組可用前台，個人規則只存瀏覽器。模組管理員（`module_admin`）管理機構規則與情境。
 3. **管不到的段落**：前端相依套件與 OCR 模型全部打包同站提供，禁止執行期連外。`locked` 規則只是操作防呆，不是安全邊界，因為使用者控制自己的瀏覽器。
 4. **不變量（MUST）**：
-   - **INV-1 零外傳**：前台頁面載入後，只允許同站 `GET` 靜態資產，不得有帶文件內容的請求。前台套佈景，佈景與區塊的 JS 與文件內容同源、可讀取預覽內容，且無 CSP 可擋，**驗收完全以 §9.1 實測為準**；佈景、區塊有變動時須重跑。
+   - **INV-1 零外傳**：不得有帶文件內容的請求。具體為：(a) 任何請求都沒有 body，URL 與標頭不含樣本值；(b) 本模組自己發出的請求只有同站 `GET` 靜態資產；(c) 選取第一個檔案（或貼上文字）之後，不得出現任何第三方請求。頁面載入時佈景的第三方 `GET`（Google Fonts 等，§B）此時還沒有文件內容，且 `Referrer-Policy: no-referrer` 不帶出網址，不違反本條。前台套佈景，佈景與區塊的 JS 與文件內容同源、可讀取預覽內容，且無 CSP 可擋，**驗收完全以 §9.1 實測為準**；佈景、區塊有變動時須重跑。
    - **INV-2 超連結零殘留**：URI 命中個資時，§5.5 清單內的位置不得出現原值的原文、percent-encoded、XML escape、HTML entity 任一形式。
    - **INV-3 規則安全**：任何機構或自訂規則都不能讓分頁失去回應（§3.3）。
    - **INV-4 DB 無個資**：只存規則與情境；`sample_text` 只能放虛構範例，表單要提示。
@@ -127,22 +129,26 @@ modules/jill_deid/
 │   └── Update.php
 ├── preloads/{autoloader,core}.php
 ├── templates/
-│   ├── jill_deid_index.tpl   ← 前台內容樣板，標題從 h3 起
+│   ├── jill_deid_index.tpl   ← 前台外框：h3 標題、分頁按鈕與使用說明連結（語言常數）、#jill-deid-app、設定 JSON
 │   ├── jill_deid_admin.tpl
 │   └── op_jill_deid_{rule,preset}_{index,form}.tpl
 ├── assets/
-│   ├── js/upstream/{core,formats,ui}/*.js   ← 上游去型別後的程式，之後直接修改（§4）
-│   ├── js/jill/              ← main.js、i18n.js、assets.js、uri-scan.js、links/*、regex.worker.js
-│   ├── vendor/               ← 第三方現成檔，勿手改
-│   ├── css/jill-deid-app.css ← 上游 styles.css
+│   ├── js/upstream/{core,formats,ui}/*.js   ← 上游去型別後的程式，含介面（§4）；修改逐條記入 PATCHES.md
+│   ├── js/jill/              ← 本模組前端，見下
+│   │   ├── main.js           ← 進入點：取代上游 main.ts，建立 #jill-deid-portal、掛載上游三個分頁
+│   │   ├── columns.js        ← 欄首標籤偵測（§6.5，純函式）
+│   │   └── assets.js、uri-scan.js、links/*、regex.worker.js（§3.3，前後台共用）
+│   ├── vendor/               ← 第三方現成檔，勿手改；由用到的模組自行 import（§4），index.php 不載入
+│   ├── css/upstream.css      ← 轉換工具由上游 styles.css 產生，限定在 app 與 portal 內，勿手改（§4）
+│   ├── css/jill_deid.css     ← 只補佈景 Bootstrap 同名 class 改掉的屬性（§6.1），同樣限定範圍
 │   ├── fonts/NotoSansTC-Regular.ttf、ocr/{worker.min.js,core/,lang/}、samples/
 │   ├── .htaccess             ← 快取設定（§4）
 │   └── THIRD_PARTY_NOTICES.txt
 ├── docs/{spec.md,PATCHES.md,VENDOR.md,marker-in-uri.md}
-├── tools/{strip-upstream.mjs,check-har.php}
+├── tools/{strip-upstream.mjs,check-har.php,e2e.mjs,make-h15.ps1}
 ├── tests/
 │   ├── rule_validate_test.php   ← 純 assert，免 XOOPS、免 PHPUnit
-│   └── browser/                 ← 瀏覽器測試頁（§9.2）：index.html、runner.js、§9.2 向量、leak-check.js、upstream/
+│   └── browser/                 ← 瀏覽器測試頁（§9.2）：index.html、runner.js、patches.test.js（§4 修補）、§9.2 向量、leak-check.js、fixtures/、upstream/
 ├── CLAUDE.md、check.ps1
 ├── language/{tchinese_utf8,english}/{modinfo,main,admin}.php（english SHOULD，至少 modinfo）
 └── sql/mysql.sql
@@ -150,7 +156,7 @@ modules/jill_deid/
 
 命名：`op` 為 `[entity]_[動作]`；常數 `_MI_JILLDEID_*`、`_MD_JILLDEID_*`、`_AM_JILLDEID_*`。
 
-模組設定（`$modversion['config']`）：`url_personal_hosts`（textarea，一行一筆，預設值見 §5.2）。其餘上限沿用上游常數，不開放設定。
+模組設定（`$modversion['config']`）：`url_personal_hosts`（textarea，一行一筆，預設值見 §5.2）；`column_labels`（textarea，一行一筆 `標籤=類別`，預設值見 §6.5）。其餘上限沿用上游常數，不開放設定。
 
 ---
 
@@ -212,13 +218,15 @@ CREATE TABLE `jill_deid_preset` (
 4. `category`：`preg_match('/^[^\[\]:\s]{1,10}$/u', ...)`（**必須 `/u`**，否則以位元組計算，4 個中文字就超過），且不得與內建類別或保留字 `網址` 同名。
 5. `retention`：通過 §3.4。
 
-6. **後台表單 JS（輔助）**：沿用上游 `validateRegex`（`new RegExp(p,'gu')`、不可匹配空字串）；在 Worker 內以 `sample_text` 試跑，200 ms 逾時或零命中都拒絕送出。
+6. **後台表單 JS（輔助）**：沿用上游 `validateRegex`（`new RegExp(p,'gu')`、不可匹配空字串）；在 `regex.worker.js` 內以 `sample_text` 試跑，零命中拒絕送出；再以壓力字串（`sample_text` 重複 500 次、`'a'.repeat(5000)+'!'`、`'1'.repeat(5000)`、`' '.repeat(5000)`）各跑一次，任一超過 200 ms 拒絕送出。小樣本跑得快不代表大檔不會回溯失控。
 
-**前台執行**：機構與自訂規則（無 `validate` 函式）MUST 在 Worker 執行；內建規則留在主執行緒。流程：
+**前台執行（MUST）**：整段偵測（內建＋機構＋個人規則）在**單一 module worker**（`assets/js/jill/regex.worker.js`，`new Worker(url, {type:'module'})`）執行，主執行緒不跑任何 regex。Worker 直接 import `core/patterns.js` 取得內建規則與 `validate`；主執行緒只送 `{text, builtinIds, extra:[{id,regex,category,retention}]}`，全文每份只送一次。流程：
 
-1. 每條規則各自送 Worker，收回 `[start,end][]`，單檔單規則 2 秒逾時即 `terminate()`，UI 警示「規則 X 逾時已略過」。
-2. 主執行緒併入候選後做 `resolveOverlaps`。
-3. `detect()` 因此要改為接受額外候選，兩個呼叫點改 async（§4 PATCHES）。
+1. Worker 依序跑每條規則，開始前送 `{rule:id}`，全部跑完送 `{cands}`（已做 `resolveOverlaps`）。
+2. 主執行緒看門狗：同一條規則 2 秒沒有新訊息即 `terminate()`，記下該規則，重建 Worker 並跳過它重跑；UI 警示「規則 X 逾時已略過」。
+3. **逾時即 fail closed**：該檔有被略過的規則時，下載前要求使用者確認「部分規則未執行，結果可能遺漏個資」（沿用上游的確認方式）。
+4. 主執行緒以 `toItems(text, cands, book)` 產生項目並編碼（CodeBook 只在主執行緒）。§6.5 欄首候選與手動項目都在主執行緒併入，再做一次 `resolveOverlaps`。
+5. 呼叫端在上游 `ui/process-view.js` 的兩個 `detect()` 呼叫點（§A），改為 async（§4 修補）。
 
 **XSS**：後台 Smarty 輸出一律 `|escape`；前台一律 `textContent`。
 
@@ -244,38 +252,53 @@ PHP 以白名單驗證：`head`、`tail` 為 0–20 整數；`delimiter` 1–3 �
 |---|---|---|---|
 | `hide_all` | `code` | 全隱藏 | 全隱藏 |
 | `partial` | `preview` | `standardSplit` | 該規則的 `retention`（不走 `standardSplit`，否則預設露出第 1 字） |
-| `custom` | `custom` | `custom_config[類別]`，未列出＝全隱藏 | `custom_config[類別]` ?? 規則 `retention` ?? 全隱藏 |
+| `custom` | `custom` | 畫面上的逐類別調整 ?? `custom_config[類別]` ?? 個人保留設定 ?? 全隱藏 | 畫面上的逐類別調整 ?? `custom_config[類別]` ?? 規則 `retention` ?? 全隱藏 |
 
-`custom_config` 格式 `{ "<類別>": <Retention> }`，載入時寫入 `state.overrides`（記憶體），**不寫 localStorage**。未列出一律隱藏，與上游一致，避免設定遺漏造成外洩。
+`custom_config` 格式 `{ "<類別>": <Retention> }`，載入時存在 `state.presetCustom`（記憶體），**不寫 localStorage**。「個人保留設定」即上游 `custom` 模式的 `it.retention`（規則頁 `setRetention`、`setCategoryRetention` 存於 localStorage），與上游一致。
+
+**「設為預設」（§6.1 去識別化頁第 7 項）只存使用者在畫面上逐類別調整過的類別**（`state.overrides`），寫入個人保留設定；情境帶入的 `custom_config` 值不寫入，避免切換情境後殘留在個人設定裡。
 
 ---
 
 ## 4. 上游移植方式
 
-**只取用** `src/`、`tests/`、`public/fonts/`、`public/samples/`、`LICENSE`。不要帶入 `.claude/`、`.specify/`、`docs/`、`examples/`、`index.html`、SEO 檔、`llms*`、`og.png`。
+**只取用** `src/core/`、`src/formats/`、`src/ui/`、`src/styles.css`、`tests/`、`public/fonts/`、`public/samples/`、`LICENSE`。不要帶入 `src/main.ts`、`.claude/`、`.specify/`、`docs/`、`examples/`、`index.html`、SEO 檔、`llms*`、`og.png`。
+
+**分工（MUST，v3.7）**：上游 `core/`、`formats/`、`ui/` 原樣沿用，介面、流程、狀態、範例都用上游的。本模組只負責：
+- 轉換時的佈景相容調整（見下方轉換第 4 點）；
+- `jill/main.js` 取代 `main.ts`，掛載三個分頁；
+- `assets/css/jill_deid.css` 處理 Bootstrap 同名 class；
+- 後台與 PHP 設定；
+- 下表核准的修補，包含本模組新增的功能。
 
 **一次性轉換**（`tools/strip-upstream.mjs`，執行者用現有的 Node 22.13 以上跑一次；結果提交進 repo，之後不再需要 Node）：
 
-1. 以 `node:module` 的 `stripTypeScriptTypes(src, {mode:'strip'})` 轉 `src/**/*.ts`。上游沒有 `enum`、`namespace` 或建構子參數屬性，去型別不改語意（已實測：30 檔全部成功，語法檢查 0 失敗）。
-2. 相對 import 補 `.js`（共 57 處）；套件 import 依下表改寫。**不用 import map**：全部改寫成相對路徑，免得依賴頁面上的行內 script，日後要恢復 CSP 也不必改。
+1. 以 `node:module` 的 `stripTypeScriptTypes(src, {mode:'strip'})` 轉 `src/core/`、`src/formats/`、`src/ui/` 下的 `.ts`（不含 `main.ts`）。上游沒有 `enum`、`namespace` 或建構子參數屬性，去型別不改語意（已實測：全部成功，語法檢查 0 失敗）。
+2. 相對 import 補 `.js`，目錄 import 補 `/index.js`；套件 import 依下表改寫。**不用 import map**：全部改寫成相對路徑，免得依賴頁面上的行內 script，日後要恢復 CSP 也不必改。
 3. **第一個 commit 只放未修改的轉換結果**，之後 `git diff` 才看得出對上游的修改。
+4. **佈景相容調整（v3.7，機械式，跟進上游時自動重做）**：
+   - `ui/` 的 `el('h2'`、`el('h3'` 降為 `h4`、`h5`。前台頁面標題是樣板的 `<h3>`，分頁內容從 `<h4>` 起。
+   - `ui/` 中 `document.body.append(`、`*.ownerDocument.body.append(` 改為掛到 `#jill-deid-portal`，找不到時退回 `body`。portal 由 `jill/main.js` 建立，是 body 的直接子元素，定位方式與掛在 body 上相同。
+   - `src/styles.css` 轉成 `assets/css/upstream.css`。每條規則（含 `@media` 內）前面加上 `:is(#jill-deid-app, #jill-deid-portal)`；`:root`、`html`、`body` 換成這個範圍本身；`@keyframes` 不動；選擇器中的 `h2`、`h3` 同步降級。上游的 `:root { font-size: 15px }` 因此不再改動佈景的 `rem` 基準。字型清單拿掉 `'Noto Sans TC'`：佈景從 Google Fonts 以 unicode-range 切片載入同名字型，上游一指名，瀏覽器就會依文件裡出現的字去抓對應分片。Phase 1b 實測選檔後出現 7 個 `fonts.gstatic.com` 請求，等於洩漏文件含哪些字，違反 INV-1 (c)；改用系統字型。
+   - `ui/` 中呼叫原生 `confirm(` 的行尾加上 `// xoops-lint-ignore`。這 3 處是瀏覽器內的本機確認（刪除個人規則、移除未下載的檔案、全部清除），不是伺服器端刪除，沿用上游作法（§6.1）。
 
 | 上游 | 本模組 |
 |---|---|
-| `jszip` | `assets/vendor/jszip.min.js`（傳統 script），改為 `globalThis.JSZip` |
-| `@pdf-lib/fontkit` | `fontkit.umd.min.js`（傳統 script），改為 `globalThis.fontkit` |
-| `libphonenumber-js` | `libphonenumber-min.js`（傳統 script），改為 `globalThis.libphonenumber` |
+| `jszip` | `assets/vendor/jszip.min.js`（UMD），改為 `import '<相對路徑>/vendor/jszip.min.js'; const JSZip = globalThis.JSZip;` |
+| `@pdf-lib/fontkit` | `fontkit.umd.min.js`（UMD），同上改為 `globalThis.fontkit` |
+| `libphonenumber-js` | `libphonenumber-min.js`（UMD），同上改為 `globalThis.libphonenumber` |
 | `pdf-lib` | `pdf-lib.esm.min.js`，相對路徑 import |
 | `pdfjs-dist`、`?url` worker | `pdf.min.js`、`pdf.worker.min.js`（來源 `.mjs` 存檔時改副檔名，避免 Apache 回錯 MIME）；worker 路徑由 `assetsBase` 組成 |
 | `tesseract.js`（動態 import） | `tesseract.esm.min.js`；OCR 的 worker、core、語言檔放 `assets/ocr/`，檔名同上游 `OCR_ASSETS` |
-| `import './styles.css'` | 移除，由樣板載入 `css/jill-deid-app.css` |
-| `import.meta.env.BASE_URL` | `jill/assets.js` 的 `assetsBase` |
+| `import.meta.env.BASE_URL` | `jill/assets.js` 的 `assetsBase`（由該檔自身網址推得 `assets/` 位置） |
 
-全域變數名稱與 `tesseract` 的 default export 尚未實跑，Phase 1b 要確認。
+已於 Phase 1b 實跑確認：`JSZip`、`fontkit`、`libphonenumber` 三個全域變數存在；`tesseract.esm.min.js` 有 default export。
+
+**UMD 以 side-effect import 載入（v3.6）**：三個 UMD 在 module 內 `this` 為 `undefined`，會改掛到 `window`／`self`／`globalThis`，頁面與 module worker 皆可用；import 在模組本體前依序求值，所以下一行即可取用全域變數。好處：fontkit（758 KB）只在 PDF 輸出時載入；Worker 可直接 import `core/patterns.js`（§3.3）；`index.php` 不必 `addScript`。前提是頁面沒有 AMD `define`（有的話 UMD 會改向 AMD 註冊）。
 
 **第三方檔案**：版本以上游 `package-lock.json` 為準，由 npm registry 或 unpkg 下載一次。`docs/VENDOR.md` 記錄每個檔案的來源網址、版本與 SHA-256。
 
-**快取**：沒有打包就沒有帶 hash 的檔名，`?v=` 也傳不到子模組。`assets/.htaccess` 在 `<IfModule mod_headers.c>` 內對 `js/`、`vendor/`、`css/` 設 `Cache-Control: no-cache`，讓瀏覽器每次驗證 ETag，升級後才不會混用新舊模組。
+**快取**：沒有打包就沒有帶 hash 的檔名，`?v=` 也傳不到子模組。`assets/.htaccess` 在 `<IfModule mod_headers.c>` 內對 `js/`、`vendor/`、`css/` 設 `Cache-Control: no-cache`，讓瀏覽器每次驗證 ETag，升級後才不會混用新舊模組。pdf.js 每份文件會重建一次 worker 並重新抓 `pdf.worker.min.js`（1.4 MB），在 `no-cache` 下斷網可能失敗，§9.1 斷網項目須含「同一頁處理第二份 PDF」；Phase 1b 實測確實失敗（`Failed to fetch dynamically imported module … pdf.worker.min.js`），已改為共用單一 worker（P1-1）。
 
 **跟進上游**：不做自動合併。把新版轉到暫存目錄，與前一版轉換結果比對，再手動套入 `assets/js/upstream/`。
 
@@ -283,20 +306,24 @@ PHP 以白名單驗證：`head`、`tail` 為 0–20 整數；`delimiter` 1–3 �
 
 | 檔案 | 修改 |
 |---|---|
-| `main.js` | 不引用，由 `jill/main.js` 取代：移除 `h1`、社群連結、FAQ、`innerHTML`、外部說明連結；頁籤補 `role="tablist"` 與方向鍵 |
-| `ui/*-view.js` | 分頁標題 `h2` 改 `h4`，以下層級依序下移（頁面標題為樣板的 `h3`，§6.1） |
-| `formats/pdf.js`、`formats/ocr.js`、`ui/samples.js` | 改用 `jill/assets.js` 的 `assetsBase`；pdf.js 若觸發 CSP eval 違規，加 `isEvalSupported:false` |
-| `core/types.js` | `CATEGORIES` 可於執行期加入機構類別與 `網址`；`LoadedDocument` 增加選用的 `links`（`LinkTarget[]`）。型別宣告已隨去型別移除，新程式以 JSDoc 標註 |
+| `formats/pdf.js`、`formats/ocr.js` | 改用 `jill/assets.js` 的 `assetsBase`（轉換工具已處理）；`ocr.js` 關閉 Tesseract 的 stderr 輸出，避免 console 錯誤訊息（§9.1）；**（P1-1，Phase 1b 實測）**`pdf.js` 改為整頁共用單一 worker（`GlobalWorkerOptions.workerPort`）：原本每份文件重抓 `pdf.worker.min.js`，斷網後第二份 PDF 失敗 |
+| `core/types.js` | `CATEGORIES` 可於執行期加入機構類別、§6.5 標籤類別與 `網址`；`LoadedDocument` 增加選用的 `links`（`LinkTarget[]`）。型別宣告已隨去型別移除，新程式以 JSDoc 標註 |
 | `core/retention.js` | `standardSplit` 增加 `case '網址'` |
 | `core/patterns.js` | 新增 `url` 規則（§5.2） |
 | `core/pattern-store.js` | `STORAGE_KEY` 改 `jill_deid.patternConfig.v1`；`getEffectivePatterns` 併入機構規則 |
-| `core/detector.js` | export `resolveOverlaps`；`detect` 接受額外候選 |
+| `core/detector.js` | **（P0，Phase 1b）** export `resolveOverlaps` 並改為 O(n log n)：已選區間依 `start` 排序，二分搜尋插入點只比左右鄰居，結果與原版相同；（Phase 3a）拆出 `findCandidates(text, patterns)`（Worker 用，回傳已解重疊的候選）與 `toItems(text, cands, book)`，`detect` 保留為兩者組合 |
 | `core/restorer.js` | 增加 URI 位置還原（§5.3） |
 | `formats/index.js` | `generateDocument(doc, edits, linkEdits = [])` |
-| `formats/docx.js`、`xlsx.js`、`pdf.js`、`plaintext.js` | 依 §5.5 擴充 |
-| `ui/process-view.js`、`preview.js`、`restore-view.js`、`patterns-view.js` | 情境、超連結模式、`🔗`、機構規則分組、async 偵測、策略對照 |
+| `formats/docx.js` | **（P0，Phase 1b）** 解析時把 part 起點 offset 存進 part，輸出時沿用，不再以第一個 `<w:t>` 推算（§A）；其餘依 §5.5 擴充 |
+| `formats/xlsx.js` | **（P0，Phase 1b）** 數值儲存格（無 `t` 或 `t="n"`，且沒有 `<f>`）納入文字；只有被改到的格子轉成 inlineStr，其餘不動；其餘依 §5.5 擴充 |
+| `formats/pdf.js`、`plaintext.js` | 依 §5.5 擴充 |
+| `ui/process-view.js` | 情境下拉與策略對照（§3.4）、超連結處理與 `🔗`（§5.4、§6.1）、偵測改走 Worker 並 async（§3.3）、欄首候選（§6.5）與來源標示、逾時下載確認、跨檔案共用與規則合併機構規則 |
+| `ui/patterns-view.js` | 機構共用規則分組（唯讀，非 locked 可停用）、測試網址框 |
+| `ui/restore-view.js` | 接上 URI 位置還原（§5.3） |
 
-i18n：PHP、tpl 一律語言常數。`assets/js/jill/` 的字串走 `t(key)`。上游 `ui/*.js` 的中文首版不抽離，缺 key 回退原文，列入 `docs/PATCHES.md` 待辦。
+本模組新增的功能（情境、超連結模式、`🔗`、機構規則分組、Worker 偵測、策略對照、欄首候選、逾時確認）都以修補方式加在上游 `ui/`，依上表逐條記錄於 `docs/PATCHES.md`。
+
+**i18n（v3.7）**：上游 `core/`、`formats/`、`ui/` 的中文原樣沿用；本模組在這些檔案內的修補，比照該檔使用中文。`assets/js/jill/`、樣板、PHP 不得硬寫中文：樣板用語言常數；`jill/` 需要的動態訊息由 `Config` 的 `i18n` 傳入。上游介面為中文，英文語系只涵蓋樣板與後台。
 
 ---
 
@@ -390,6 +417,7 @@ function scanUri(uri: string, patterns: Pattern[], book: CodeBook): LinkDecision
 5. 文字掃描範圍增加 `footnotes.xml`、`endnotes.xml`、`comments.xml`。
 6. **上游殘留修補（MUST）**：輸出時移除 `mc:Fallback`、`w:del`、`w:moveFrom` 節點；清空 `w:ins`、`w:del`、`w:comment` 的 `w:author`、`w:initials`。否則文字方塊與追蹤修訂的原文會留在檔案裡。
 7. `docProps/core.xml`、`app.xml`、`custom.xml` 的作者、最後修改者、公司 MUST 清空（預設開啟，UI 可關）。
+8. **`word/people.xml`（v3.6，H15 實測）**：修訂者名單，MUST 與第 6 點同步處理：清空 `w15:person` 的 `w15:author`，移除 `w15:presenceInfo`（登入 Office 時含帳號 ID，可能是 email）。
 
 **XLSX**
 
@@ -415,6 +443,8 @@ function scanUri(uri: string, patterns: Pattern[], book: CodeBook): LinkDecision
 
 **決定**（2026-11-10 使用者修訂，取代原獨立頁方案）：前台與其他模組一致，走 `header.php`／`footer.php`、套佈景，不送 CSP。
 
+**Google 翻譯（v3.7）**：佈景的翻譯小工具會把整頁（含預覽中的個資）送到 Google。`index.php` 在佈景設定指派的樣板變數中拿掉 `google_translate` 項目，本頁不輸出小工具、也不載入它的 script；`#jill-deid-app` 與 `#jill-deid-portal` 另加 `translate="no"`、`notranslate`，瀏覽器內建翻譯也略過。
+
 **代價（MUST 知悉）**：佈景與區塊的 JS 和文件內容同源，可讀取預覽內容；佈景有行內腳本，無法套嚴格 CSP。零外傳（INV-1）因此只能以 §9.1 HAR 實測把關，佈景或區塊有變動時須重跑。
 
 ```php
@@ -429,25 +459,67 @@ $GLOBALS['xoopsOption']['template_main'] = 'jill_deid_index.tpl';
 require_once XOOPS_ROOT_PATH . '/header.php';
 
 $xoopsTpl->assign('deid_config_json', Config::toJson());
-$xoTheme->addStylesheet('modules/jill_deid/assets/css/jill-deid-app.css');
-foreach (['jszip.min.js', 'fontkit.umd.min.js', 'libphonenumber-min.js'] as $js) {
-    $xoTheme->addScript("modules/jill_deid/assets/vendor/{$js}");
-}
+$xoTheme->addStylesheet('modules/jill_deid/assets/css/upstream.css');   // 轉換工具產生（§4）
+$xoTheme->addStylesheet('modules/jill_deid/assets/css/jill_deid.css');  // Bootstrap 同名 class 相容
+// vendor 由用到的模組自行 import（§4），這裡不載入
 $xoTheme->addScript('modules/jill_deid/assets/js/jill/main.js', ['type' => 'module']);
 
 require_once XOOPS_ROOT_PATH . '/footer.php';
 ```
 
-`jill_deid_index.tpl` 只放內容區：`<h3>` 頁面標題、`<script id="jill-deid-config" type="application/json">`、掛載點。標題層級從 `<h3>` 起（convention §7），上游分頁 `h2` 依 §4 改為 `h4`。
+#### 介面寫法（MUST）
 
-沿用上游三頁籤，新增：
+- **沿用上游介面（v3.7）**：`jill/main.js` 取代上游 `main.ts`，不含頁首、作者連結與 FAQ。它負責：
+  - 建立 `#jill-deid-portal`；
+  - 依樣板的分頁按鈕掛載上游三個分頁，切換邏輯與 `main.ts` 相同；
+  - 安裝 tooltip 與離開頁面前的提醒。
+- **結構在樣板**：`jill_deid_index.tpl` 放 `<h3>` 頁面標題、分頁按鈕、「使用說明」連結（連到上游 README「操作流程」，新分頁開啟）與 `#jill-deid-app`，文字都用 `_MD_JILLDEID_*`。設定 JSON 於 Phase 2 加入。
+- **標題層級**：上游的 `h2`、`h3` 由轉換工具降為 `h4`、`h5`（§4），分頁內不得出現 `h1`–`h3`。
+- **樣式**：
+  - `assets/css/upstream.css` 由轉換工具產生，不得手改。
+  - `assets/css/jill_deid.css` 只補佈景 Bootstrap 同名 class 改掉、上游又沒有設定的屬性。目前有四處：`[hidden]`、`.toast`（Bootstrap 的 `:not(.show)` 會隱藏）、`.tooltip`（透明度 0）、`.mark`（文字顏色）。
+  - 兩個檔案的每條規則都限定在 `:is(#jill-deid-app, #jill-deid-portal)` 內（`tests/browser/ui.test.js`）。
+- **確認對話框與提示**：沿用上游的作法，包括 3 處原生 `confirm()`、上游的提示 dialog 與 toast。
+- **`innerHTML`**：上游 `ui/` 沒有使用；`assets/js/jill/` 與樣板禁用。
 
-1. 頂部情境下拉，預設 `isDefault`。切換只呼叫 `resplitItems`，不重新解析檔案。
+#### 上游功能（沿用，對應上游 README「操作流程」步驟 1–7，驗收時逐項確認）
+
+**去識別化頁**
+
+1. 選檔與拖放（`ACCEPT_ATTR`、`MAX_FILES`、`MAX_FILE_BYTES`），可一次多檔、可「加入檔案」追加。
+2. 貼上文字，按「開始去識別化」以純文字處理。
+3. 範例卡：載入或下載 `assets/samples/` 的範例（沿用上游清單與檔案）。
+4. 掃描 PDF 的 OCR：進度（頁數、縮圖）與「取消辨識」。
+5. 每個檔案一張卡：偵測項目清單（類別、原值、預覽標記），可逐項取消，或依類別批次取消；類別統計；「重新偵測」；「移除」。
+6. 預覽：標記位置以底色顯示，可切「純文字檢視」；在預覽中圈選文字可「新增為去識別化項目」。
+7. 輸出設定：保留方式（全部隱藏／部分保留／自訂，自訂可逐類別設定並「設為預設」，優先順序與「設為預設」的範圍見 §3.4）、標記樣式（`code`／`label`／`blank`）。
+8. 進階「跨檔案共用編碼」：整批共用 CodeBook；可匯入既有編碼表沿用，並輸出合併編碼表。
+9. 下載：去識別化檔、編碼表 CSV；多檔時可打包下載；可複製純文字結果。有規則逾時被略過的檔案，下載前須確認（§3.3）。
+10. 有未下載結果時，離開頁面前警示（`beforeunload`）。
+11. 顯示各格式限制（`formatLimitations`）。
+
+**偵測規則頁**
+
+1. 內建規則依群組列出，可逐條或全部啟用／停用。
+2. 個人自訂規則：新增、編輯、刪除（名稱、類別、RegExp、測試文字），以 `validateRegex` 驗證，可「填入範例」。
+3. 每條規則可檢視並設定保留方式（`setRetention`、`setCategoryRetention`）。
+4. 設定只存 `localStorage`（`pattern-store`）。
+
+**還原頁**
+
+1. 上傳去識別化文件與編碼表 CSV（可用範例體驗）。
+2. 還原預覽，列出找不到的編碼（`missingCodes`）。
+3. 下載還原文件。
+
+#### 本模組新增
+
+1. 頂部情境下拉，預設 `isDefault`。切換只重算保留方式（`resplitItems`），不重新解析檔案。
 2. 輸出設定新增「超連結處理」（§5.4）。
-3. 含個資連結旁的 `🔗` `<button>`（`aria-label` 走 i18n）：彈出層對照顯示文字與連結的前後差異，可取消或移除連結；鍵盤可開啟、`Esc` 關閉。沒有 `displayRange` 的連結列在檔案上方的「文件連結」清單。
+3. 含個資連結旁的 `🔗` `<button>`（`aria-label` 用語言常數）：彈出層（Bootstrap popover／modal）對照顯示文字與連結的前後差異，可取消或移除連結；鍵盤可開啟、`Esc` 關閉。沒有 `displayRange` 的連結列在檔案上方的「文件連結」清單。
 4. 偵測規則頁新增「機構共用規則」分組（唯讀，非 locked 可停用）與「測試網址」框（顯示解碼組件與命中位置）。
 5. 範例 `samples/hyperlinks.{docx,xlsx,md}`，虛構資料，由腳本產生。
-6. UI 明示已知不涵蓋範圍（§10）。
+6. 介面明示已知不涵蓋範圍（§10）。
+7. 偵測項目標示來源：規則命中、欄首標籤（§6.5，顯示標籤名）、手動。欄首候選可依欄批次取消。
 
 ### 6.2 後台 `admin/main.php`
 
@@ -491,19 +563,65 @@ $xoTheme->addScript('modules/tadtools/sweet-alert/sweet-alert.js');
 | 資料 | 格式 |
 |---|---|
 | 學號 | 國小 6 碼、國中 7 碼，前 3 碼為入學學年度（115 學年度為 `115XXX`） |
-| 座號 | 2 碼數字 |
+| 座號 | 2 碼數字；國小常寫 1 碼（「座號 3」），規則收 1–2 碼（v3.6） |
 | 員編 | 第 1 碼為英文大寫字母（不限 A），範例 `A200038`；其後 6 碼數字依此範例推定 |
 | 文號 | 固定 10 碼數字。範例 `教課（一）字第1141431254號`、`字第1140087197A號`；結尾字母依範例推定為可省略的 1 個大寫字母 |
 
-學號、座號是純數字，沒有固定前綴，一定要有標籤上下文，否則 `1\d{5,6}` 會把金額 `150000` 也遮掉。員編、文號有自己的特徵，不需要標籤。
+學號、座號是純數字，沒有固定前綴，一定要有標籤上下文，否則 `1\d{5,6}` 會把金額 `150000` 也遮掉。員編、文號有自己的特徵，不需要標籤。標籤在欄首、值在下方各列的名冊由 §6.5 處理。
 
 | title | category | pattern | retention | sample_text |
 |---|---|---|---|---|
 | 學號 | 學號 | `(?<=學號[:：\s]*)1\d{5,6}(?!\d)` | `ends 3/0` | 學號 115001 |
-| 座號 | 座號 | `(?<=座號[:：\s]*)\d{2}(?!\d)` | `none` | 座號 03 |
+| 座號 | 座號 | `(?<=座號[:：\s]*)\d{1,2}(?!\d)` | `none` | 座號 3 |
 | 教職員編號 | 員編 | `(?<![A-Za-z0-9])[A-Z]\d{6}(?!\d)` | `none` | 員編 A200038 |
 | 公文字號 | 文號 | `(?<=字第)\d{10}[A-Z]?(?=號)` | `none` | 教課（一）字第1140087197A號 |
-| 校務網址參數 | 學號 | `(?<=[?&](?:stu\|sid\|student_id)=)[^&#]+` | `none` | `?sid=112001` |
+| 校務網址參數 | 學號 | `(?<=[?&](?:stu\|sid\|student_id)=)[^&#\s]+` | `none` | `?sid=112001` |
+
+規則也會跑在內文上。v3.5 的 `[^&#]+` 不排除空白與換行，實測在內文中從 `112001` 一路吞到文件結尾；v3.6 加上 `\s`。
+
+### 6.5 欄首標籤偵測（v3.6）
+
+**理由**：學校最常處理的是名冊。實測 v3.5 的流程中：學號、座號在 Excel 多為數值格，原本完全不讀（§A，已修補）；標籤在欄首時，§6.4 的前後文規則不會命中；表外姓氏（武、章、尹、崔、史、熊）在姓名欄 6 個全漏。
+
+**範圍**：XLSX（`layout.sheets[].cells`）與 DOCX 表格（`layout.paragraphs[].table`，同一格多段落合併為一格）。TXT、MD、PDF 不做。
+
+**`assets/js/jill/columns.js`**（純函式，先寫測試）：`columnCandidates(doc, labels) → {category, start, end, label}[]`
+
+1. 標籤表：`Config.columnLabels`（`{標籤: 類別}`，來自模組設定 `column_labels`）。比對前去掉空白、全半形冒號、`*`、`＊`，英文不分大小寫，完全相同才算。
+2. **標題格**：文字符合標籤，且正下方那格（同欄、下一列）存在且**不是**標籤。最後一條排除直式表單（姓名／地址／電話上下排在同一欄）。
+3. **候選**：同一工作表或表格、同一欄、列號大於標題格的每個非空格，直到該欄出現下一個標題格為止。範圍為該格文字去掉前後空白。
+4. 類別為標籤對應的類別；不是內建也不是機構類別時，於執行期加入 `CATEGORIES`（§4），且須通過 §3.3 第 4 點的格式。保留方式依 §3.4，機構類別取該規則的 `retention`。
+5. 與規則候選合併時（§3.3 第 4 步），**規則候選排在前面**：等長、同起點時保留規則的類別，例如「電話」欄裡的 `0912-345-678` 仍歸 `手機`。
+
+**預設標籤**（`_MI_JILLDEID_COLUMN_LABELS_DEFAULT`，一行一筆）：
+
+```text
+姓名=姓名
+學生姓名=姓名
+家長姓名=姓名
+監護人=姓名
+導師=姓名
+學號=學號
+座號=座號
+身分證=身分證
+身分證字號=身分證
+身分證統一編號=身分證
+出生日期=生日
+生日=生日
+手機=手機
+行動電話=手機
+電話=市話
+聯絡電話=市話
+地址=地址
+住址=地址
+通訊地址=地址
+戶籍地址=地址
+電子郵件=電子郵件
+EMAIL=電子郵件
+員工編號=員編
+```
+
+**不涵蓋**（列入 §10）：合併儲存格（`mergeCells`、`gridSpan`）造成的欄位錯位、標題跨兩列、沒有標題列的名冊、直式表單（標籤在左、值在右，只靠 §6.4 前後文）。
 
 ---
 
@@ -527,6 +645,7 @@ $xoTheme->addScript('modules/tadtools/sweet-alert/sweet-alert.js');
       "custom": {}, "isDefault": true }
   ],
   "urlPersonalHosts": ["facebook.com", "line.me/ti/p"],
+  "columnLabels": { "姓名": "姓名", "學號": "學號", "座號": "座號" },
   "i18n": { "tab.deid": "去識別化", "tab.rules": "偵測規則", "tab.restore": "還原" }
 }
 ```
@@ -541,15 +660,18 @@ $xoTheme->addScript('modules/tadtools/sweet-alert/sweet-alert.js');
 | Phase | 產出 | 完成條件 |
 |---|---|---|
 | 1a 骨架 | 以 `tad_xmod_maker` 產生（見下）、建 git repo、放入 `docs/spec.md` 與 `CLAUDE.md`，再依本文補齊 `strict_types`、語言常數 | 可安裝、移除、升級，E_ALL 0 警告，xoops-lint 0 error |
-| 1b 前端驗證 | §4 轉換與第三方檔案、`index.php` 在佈景內載入上游介面；確認全域變數、與佈景 CSS／JS 無衝突、五種格式與 OCR；以 H15 確認上游 DOCX 殘留 | 不通過就停下回報，不進下一個 Phase |
-| 2 後台 | Rule、Preset、Config、admin 樣板、規則包、`tests/rule_validate_test.php` | §9.3 |
-| 3a 前端移植 | `jill/main.js`、assets、i18n、Worker 化、瀏覽器測試頁 | 移植的上游測試全過；§9.1 全過 |
-| 3b-1 URI 核心 | `uri-scan.js`、`url` 規則、還原 regex、合約文件 | H1–H3、H10、H13、H17–H19 |
+| 1b 前端驗證 | §4 轉換（`core/`、`formats/`、`ui/`，vendor 改 side-effect import，佈景相容調整）與第三方檔案；§4 標 P0 的三項修補；`tests/browser/` 最小 runner、`patches.test.js`、`ui.test.js`；上游介面掛載於佈景內，確認五種格式與 OCR；以 H15 確認上游 DOCX 殘留 | H20、H21、H25 與 `ui.test.js` 通過；不通過就停下回報，不進下一個 Phase |
+| 2 後台 | Rule、Preset、Config（含 `columnLabels`）、admin 樣板、規則包、`tests/rule_validate_test.php` | §9.3 |
+| 3a 前端基礎 | 單一 module worker（§3.3，修補 `ui/process-view.js` 改 async）、`columns.js`（§6.5）、上游 `core`／`formats`／`ui` 測試移植 | 移植的上游測試、H22–H24 全過 |
+| 3b-1 URI 核心 | `uri-scan.js`、`url` 規則、還原 regex、合約文件 | H1–H3、H10、H13、H17–H19、H26 |
 | 3b-2 Markdown | `links/markdown.js` | H9 |
 | 3b-3 DOCX | rels、欄位碼、Fallback／del、docProps | H4–H7、H15、H16 |
 | 3b-4 XLSX | hyperlinks、公式 | H8 |
-| 3b-5 PDF＋還原 | annotation 偵測、restore-view | H12、H14 |
-| 4 前台整合 | 情境、`🔗`、機構規則分組、範例、無障礙 | H11、§9.4 |
+| 3b-5 PDF＋還原核心 | annotation 偵測、URI 還原 | H12、H14 |
+| 4a 去識別化頁 | 修補上游 `ui/process-view.js`：§6.1「本模組新增」1–3、7 項（情境、超連結處理、`🔗`、項目來源）、欄首候選、逾時確認；上游功能 1–11 項逐項驗收 | H4、H11 的介面部分；§9.1 |
+| 4b 偵測規則頁 | 修補上游 `ui/patterns-view.js`：機構規則分組、測試網址 | §9.3 前台攔截兩項 |
+| 4c 還原頁 | 修補上游 `ui/restore-view.js` 接上 URI 還原 | H12 經介面操作一次 |
+| 4d 整合 | 本模組範例（`hyperlinks.*`）、已知不涵蓋範圍說明、無障礙、語言檔補齊 | §9.4 |
 | 5 驗收 | lint、斷網實測、Office 手動開檔 | §9 全勾 |
 
 **Phase 1a 的 maker 設定**（`modules/tad_xmod_maker/index.php?op=add_Form`）：目錄名 `jill_deid`；`min_xoops` 2.7.4；`min_php` **改成 8.3**（預設 8.2）；資料表依 §3。後台選單只建規則與情境頁，前台只留 `index.php`，不建區塊。**不使用 maker 的 CRUD 與表單程式碼**，`pattern` 用 `getText`、刪除走 POST 等要求依 §3、§6.2 手寫。maker 產出的前台 `index.php` 依 §6.1 改寫。
@@ -562,13 +684,14 @@ $xoTheme->addScript('modules/tadtools/sweet-alert/sweet-alert.js');
 
 ### 9.1 環境與隱私
 
-- [ ] XOOPS 2.7.4＋PHP 8.3（`E:\my_xoops274`），`E_ALL` 下安裝、前後台操作 0 Error／Warning／Deprecated。
+- [ ] XOOPS 2.7.4＋PHP 8.3（`E:\my_xoops274`），`E_ALL` 下安裝、前後台操作 0 Error／Warning／Deprecated。例外（使用者決定不修，2026-11-10）：xbootstrap5 下 TadTools `preloads/core.php:231` 的 `Undefined array key "menu_var_kind"` 與 `class/Tools.php:650` 的兩則 `strpos()` Deprecated，起因是該佈景設定快取 `xoops_data/data/xbootstrap5_setup.json` 沒有 `menu_var_kind`，全站每頁都會出現，與本模組無關。
 - [ ] `php D:/workspace/02_Tools/xoops-lint/xoops-lint.php modules/jill_deid` 0 error。
-- [ ] DevTools 開 Preserve log，處理 5 種格式各一份並下載，匯出 HAR；`php tools/check-har.php <har> <樣本值檔>` 確認所有請求皆同站、`GET`、無 body，URL 不含樣本值。**不可用 grep CDN 字串驗收**，`tesseract.js` 內建預設網址字串必定命中。
+- [ ] DevTools 開 Preserve log，處理 5 種格式各一份並下載，匯出 HAR；`php tools/check-har.php <har> <樣本值檔>` 依 INV-1 確認：所有請求無 body、URL 與標頭不含樣本值；本模組路徑下的請求皆為同站 `GET`；第一個檔案選取後沒有任何第三方請求（以 HAR 的 `startedDateTime` 與操作時間比對，或在選檔前清空 log）。**不可用 grep CDN 字串驗收**，`tesseract.js` 內建預設網址字串必定命中。
+- [ ] `node tools/e2e.mjs [佈景 …]` 全部 PASS：以 headless Chrome 在佈景內載入上游範例（五種格式加掃描 PDF 的 OCR）、打包下載、斷網後處理第二份 PDF，並以 CDP 記錄的 HAR 跑 `check-har.php`（含 worker 的請求）。佈景或區塊有變動時重跑。
 - [ ] 同一輪確認在站上實際使用的佈景（至少 `xswatch5`、`xbootstrap5`）內，5 種格式與 OCR 都能跑完，console 0 個錯誤；HAR 中佈景與區塊發出的請求同樣不得帶文件內容。
 - [ ] 所有模組與 worker 的回應 `Content-Type` 為 JavaScript，`assets/` 內沒有 `.mjs`。
 - [ ] 修改 `assets/js/` 任一檔案後一般重新整理（不清快取），瀏覽器會取得新版（§4 快取設定生效）。
-- [ ] 各功能各跑一次讓資產進快取後切 DevTools Offline，不重新整理，可完成去識別化與還原。
+- [ ] 各功能各跑一次讓資產進快取後切 DevTools Offline，不重新整理，可完成去識別化與還原，**且同一頁再處理第二份 PDF 也成功**（§4 快取）。
 - [ ] 模組位於子目錄與不同網域路徑時，字型、OCR、範例都能載入（即 `assetsBase` 生效）。
 
 ### 9.2 超連結測試向量（瀏覽器測試頁，全部 MUST）
@@ -576,6 +699,8 @@ $xoTheme->addScript('modules/tadtools/sweet-alert/sweet-alert.js');
 `tests/browser/index.html` 以本機站台開啟，頁面顯示通過數與失敗明細。`runner.js` 用最少的程式提供 `describe`、`it`、`expect`，只實作測試真正用到的 matcher，不引入測試框架。
 
 上游測試以同一支工具去型別後放進 `tests/browser/upstream/`。`tests/unit` 的 `core`、`formats` 與 `tests/integration` 應移植；依賴 Node 或 jsdom 而無法直接跑的，改寫或列入 `docs/PATCHES.md` 的略過清單並寫明原因。**不得為了通過而略過與個資偵測、遮罩、還原相關的測試。**
+
+上游 UI 測試（`patterns-view`、`preview`、`output-panel`、`busy` 等）一併移植（v3.7）；`seo` 不移植，因為 `main.ts`、`index.html` 不帶入。原本依賴 jsdom 的測試在瀏覽器以真實 DOM 執行。涉及個資結果的行為（輸出模式與保留方式對照、預覽標記、手動新增項目、批次取消）MUST 移植，逐條列入 `docs/PATCHES.md` 對照表。
 
 預設 `mask_pii_in_url`、`marker=code`、`partial`。
 
@@ -590,16 +715,23 @@ $xoTheme->addScript('modules/tadtools/sweet-alert/sweet-alert.js');
 | H7 | 兩個 `<w:hyperlink>` 共用 rId，僅一個取消 | 產生新 rId，兩者各自正確 |
 | H8 | XLSX `HYPERLINK("mailto:…","王小明")` | `<f>`、`<v>` 皆無原值，`<f>` 保留 |
 | H9 | `[王小明](https://example.com/u?id=A123456789 "王小明")` 與 `[1]: …` | text、url、title、reference 全部去識別化，且每處只替換一次 |
-| H10 | `https://www.facebook.com/wang.xiaoming` | `https://www.facebook.com/<編碼的[網址:x]>` |
+| H10 | 連結目標（URI 位置）`https://www.facebook.com/wang.xiaoming` | `https://www.facebook.com/<編碼的[網址:x]>` |
 | H11 | `marker=label` | 含個資連結自動 strip，UI 提示 |
 | H12 | H1–H10 去識別化＋CSV 還原 | 顯示文字逐字一致；URI 依 §5.3 一致；H10 的路徑不得出現 `%2F` 類誤編碼 |
 | H13 | 損壞編碼 `%E7%8E` | 不拋例外；整個值以 `網址` 全遮蔽並警示；還原後回到原字串 |
 | H14 | PDF `/Link` 含身分證 | `.deid.pdf` 以 `qpdf --qdf` 展開後無原值、無 `/URI` |
-| H15 | DOCX 含文字方塊（`mc:Fallback`）與追蹤修訂刪除內容 | 解壓後全檔無原值；Word 可正常開啟 |
+| H15 | `tests/browser/fixtures/h15.docx`（`tools/make-h15.ps1` 以 Word 產生）：文字方塊（`mc:Fallback`）、追蹤修訂刪除內容、虛構作者 `測試作者` | 解壓後全檔無原值、無作者（含 `people.xml`）；Word 可正常開啟。Phase 1b 已記錄上游殘留（`h15.test.js`），3b-3 改為期待零殘留 |
 | H16 | 欄位碼被拆成 3 個 `instrText` run | 正確改寫，無殘片 |
 | H17 | 啟用校務網址參數規則，`?sid=112001` | 命中並只遮 value；`?other=112001` 不因此規則命中 |
 | H18 | Big5 `?name=%A4%FD%A4p%A9%FA` | 不拋例外，值全遮蔽並警示 |
 | H19 | `http://192.168.1.10/x` | host 命中，連結 strip，UI 標示不可還原 |
+| H20 | DOCX：document 開頭為空段落；第一段以 `<w:tab/>` 開頭；頁首開頭為空段落，三者各含身分證與姓名 | 解壓後 `<w:t>` 為 `身分證 [身分證:x] [姓名:y]` 形式，無原值殘字，與預覽文字一致 |
+| H21 | XLSX：A2 為數值格 `115001`（無 `t`）、B2 為 `t="n"` 的 `3`、C2 為有 `<f>` 的數值格 | A2、B2 進入 `text`；C2 不進入且 `<f>` 原樣保留；未改動的數值格位元組不變 |
+| H22 | XLSX 名冊：第 1 列 `座號 學號 姓名`，以下為數值座號、數值學號、`武大郎`、`章志明` | 三欄全部成為候選，類別依標籤 |
+| H23 | DOCX 表格名冊，同 H22 | 同 H22 |
+| H24 | 直式表單：A 欄上下為 `姓名`、`地址`、`電話`，B 欄為值 | §6.5 不產生候選（交給 §6.4 與內建規則） |
+| H25 | `resolveOverlaps` 新舊版對 5,000 筆隨機重疊候選 | 結果完全相同；8 萬筆不重疊候選 < 100 ms |
+| H26 | 文字層裸網址 `https://www.facebook.com/wang.xiaoming`（TXT） | 輸出 `https://www.facebook.com/[網址:x]`，標記不編碼（§5.3） |
 
 `tests/browser/leak-check.js`（MUST）：讀 zip 內**所有文字型項目**，含 `*.rels`，不只 `.xml`；對每個原值檢查原文、`encodeURIComponent`（大小寫 hex）、XML escape、HTML entity 皆不存在。
 
@@ -608,7 +740,7 @@ Fixture 優先沿用上游 `tests/helpers/docx-builder.ts`、`xlsx-builder.ts` �
 ### 9.3 後台
 
 - [ ] `php tests/rule_validate_test.php`：`(a+)+$`、`(\w*)*x`、`\1`、空字串匹配、`category` 含 `:`、11 字類別、內建類別 `姓名` 皆被拒；8 字中文類別、§6.4 全部 pattern 皆通過。
-- [ ] 匯入規則包後，§6.4 七類各以一筆同行標籤的虛構資料測試，全部命中，含 6、7 碼學號與兩種文號。下列不命中：`學費 150000 元`、`座號 123`、`學號 11500123`，且員編規則不得命中 `A123456789`。
+- [ ] 匯入規則包後，§6.4 七類各以一筆同行標籤的虛構資料測試，全部命中，含 6、7 碼學號、1、2 碼座號與兩種文號。下列不命中：`學費 150000 元`、`座號 123`、`學號 11500123`，且員編規則不得命中 `A123456789`。內文 `?sid=112001 請查閱。` 只命中 `112001`。
 - [ ] 實際從表單儲存 `(?<!\d)1\d{5}` 與 `(?<y>\d{4})`，DB 內字串與輸入**完全相同**。
 - [ ] 新增校務網址參數規則（`apply_to_url=1`）後，前台重新整理可攔截 `?sid=112001`；設為 0 則不攔 URI。
 - [ ] 寫入 op 以 GET 呼叫、缺 token、非管理員皆被拒。
@@ -617,7 +749,7 @@ Fixture 優先沿用上游 `tests/helpers/docx-builder.ts`、`xlsx-builder.ts` �
 ### 9.4 無障礙與語言
 
 - [ ] 前後台模組內容皆無 `<h1>`、`<h2>`，從 `<h3>` 起且層級不跳階。
-- [ ] `*.php`（語言檔除外）、`*.tpl` 無硬寫中文。
+- [ ] `*.php`（語言檔除外）、`*.tpl`、`assets/js/jill/**/*.js` 無硬寫中文（上游 `ui/` 依 §4 i18n 例外）；`assets/js/jill/` 與樣板無 `innerHTML`；`assets/css/upstream.css`、`jill_deid.css` 每條規則都在範圍內（`ui.test.js`）。
 - [ ] 互動元件 ≥ 44×44 px、文字對比 ≥ 4.5:1、純圖示按鈕有 `visually-hidden` 文字。
 - [ ] 鍵盤可完成整個流程；axe DevTools 0 個 serious／critical。
 
@@ -629,14 +761,14 @@ Fixture 優先沿用上游 `tests/helpers/docx-builder.ts`、`xlsx-builder.ts` �
 
 - 伺服器端任何文件處理。
 - PDF 還原時重建連結。
-- 英文姓名、地址偵測；`.doc`、`.xls`、`.pptx`、圖片輸入；調整上游偵測準確度。
+- 英文姓名、地址偵測；`.doc`、`.xls`、`.pptx`、圖片輸入；調整上游 regex 的準確度（§4 P0 修補與 §6.5 除外）。
 - `mask_whole_url` 模式。要做時須先定義 `https://invalid.invalid/` 的還原合約。
 
 **已知殘留（MUST 在 UI 與說明告知，不得宣稱完全無殘留）**：
 
-- Excel：以數值儲存的電話、證號；非 `HYPERLINK` 公式及其快取值；工作表名稱；定義名稱。
+- Excel：以數值儲存、又不在 §6.5 標籤欄內的電話（前導 0 已遺失，規則比不到）；公式（含 `HYPERLINK` 以外）及其快取值；工作表名稱；定義名稱。
 - URI：雙重編碼（`%25E7…`）、Base64、自訂編碼的參數值。
 - 文件內嵌圖片裡的文字（PDF 掃描檔由 OCR 重建者除外）。
-- **直欄名冊（已用草案 regex 實測）**：標籤在欄首、值在下方列時，學號、座號不命中，員編、文號不受影響。學號、座號是純數字，拿掉標籤會誤遮金額，本版也不做欄位感知偵測；UI MUST 提醒使用者人工檢查名冊的這兩欄。
-- **姓名**：內建偵測靠姓氏表與前後文，表外姓氏不命中（已確認武、史、熊、章、尹、崔、賀、俞、靳不在表內）。UI MUST 提醒人工檢查，不得宣稱可全部抓到。
+- **名冊（v3.6 改由 §6.5 處理）**：欄首標籤偵測不涵蓋合併儲存格造成的欄位錯位、標題跨兩列、沒有標題列的名冊；UI MUST 提醒使用者人工檢查這類名冊。
+- **姓名**：內建偵測靠姓氏表與前後文，表外姓氏不命中（已確認武、史、熊、章、尹、崔、賀、俞、靳不在表內）；只有在 §6.5 標籤欄內才補得到。UI MUST 提醒人工檢查，不得宣稱可全部抓到。
 - **身分證號**：內建規則只比對第 2 碼為 1、2 的國民身分證，且檢核碼錯誤不命中；居留證（如 `A800000014`、`AC01234567`）不命中。有外籍師生時，須另加機構規則。
