@@ -6,7 +6,9 @@
 // The worker lives as long as the page: a new one would fetch its modules again, which fails offline under the
 // no-cache policy (spec §4, §9.1). If it cannot be (re)started, the remaining rules count as skipped.
 import { resolveOverlaps, toItems } from '../upstream/core/detector.js';
+import { getPersonalHosts } from '../upstream/core/patterns.js';
 import { columnCandidates } from './columns.js';
+import { brokenTextCandidates } from './uri-scan.js';
 import { config } from './config.js';
 
 export const WATCHDOG_MS = 2000;
@@ -63,7 +65,7 @@ function scanOnce(text, rules, watchdogMs) {
           finish();
         }
       };
-      worker.postMessage({ type: 'detect', text, rules: todo });
+      worker.postMessage({ type: 'detect', text, rules: todo, hosts: getPersonalHosts() });
     };
     start();
   });
@@ -81,11 +83,11 @@ export async function detectDocument(doc, patterns, book) {
   const enabled = patterns.filter((p) => p.enabled);
   const rules = enabled.map((p) => (p.source === 'builtin'
     ? { id: p.id, retention: p.retention }
-    : { id: p.id, category: p.category, regex: p.regex, retention: p.retention }));
+    : { id: p.id, category: p.category, regex: p.regex, retention: p.retention, applyToUrl: p.applyToUrl }));
   const { cands, skipped } = await scanInWorker(doc.text, rules);
   const columns = columnCandidates(doc, config.columnLabels, (category) => enabled.find((p) => p.category === category)?.retention);
   return {
-    items: toItems(doc.text, resolveOverlaps([...cands, ...columns]), book),
+    items: toItems(doc.text, resolveOverlaps([...cands, ...columns, ...brokenTextCandidates(doc.text)]), book),
     skipped: skipped.map((id) => enabled.find((p) => p.id === id)?.name ?? id),
   };
 }

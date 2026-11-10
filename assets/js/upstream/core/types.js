@@ -1,6 +1,6 @@
                                                                
 
-export const CATEGORIES = ['姓名', '身分證', '手機', '市話', '地址', '電子郵件', '公司', '統編', '識別碼', '國際電話', '信用卡', 'SSN', 'IBAN', 'IP', '生日']         ;
+export const CATEGORIES = ['姓名', '身分證', '手機', '市話', '地址', '電子郵件', '公司', '統編', '識別碼', '國際電話', '信用卡', 'SSN', 'IBAN', 'IP', '生日', '網址']         ; // jill_deid patch (PATCHES.md P1-5): 網址
                                                    
 
 /** How much of a detected value stays visible outside the marker (see core/retention.ts). */

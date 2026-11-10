@@ -4,6 +4,35 @@ import { ibanLength, isBirthDate, isCardNumber, isIpv6, isSsn, phoneLength } fro
 
 const CJK = '\\u4e00-\\u9fa5';
 
+// jill_deid patch (PATCHES.md P1-5): personal-page URLs (spec §5.2).
+export const URL_CATEGORY = '網址';
+/** A bare URL in text: URI characters only (RFC 3986), as Chinese prose often follows with no space. */
+export const URL_REGEX = "(?:https?://|www\\.)[\\w\\-.~:/?#\\[\\]@!$&'()*+,;=%]+";
+/** Trailing punctuation belongs to the sentence, not the URL. */
+export const trimUrl = (url) => url.replace(/[.,;:!?')\]]+$/, '');
+let personalHosts = [];
+let hostList = [];
+/** Lines of Config.urlPersonalHosts: domain[/pathPrefix]; the domain matches by suffix (www., m. …). */
+export function setPersonalHosts(list) {
+  hostList = [...list];
+  personalHosts = list.map((s) => s.trim().toLowerCase().replace(/^https?:\/\//, '')).filter(Boolean).map((t) => {
+    const i = t.indexOf('/');
+    return i < 0 ? { domain: t, prefix: '' } : { domain: t.slice(0, i), prefix: t.slice(i).replace(/\/+$/, '') };
+  });
+}
+export const getPersonalHosts = () => hostList;
+/** Validator of the url rule: the URL's length without trailing punctuation when it is on the list, else false. */
+export function personalUrlLength(url) {
+  const u = trimUrl(url);
+  const m = u.match(/^(?:https?:\/\/)?([^/?#:]+)(?::\d+)?([^?#]*)/i);
+  if (!m) return false;
+  const host = m[1].toLowerCase();
+  const path = m[2];
+  const on = personalHosts.some((h) => (host === h.domain || host.endsWith(`.${h.domain}`))
+    && (!h.prefix || path === h.prefix || path.startsWith(`${h.prefix}/`)));
+  return on ? u.length : false;
+}
+
 export const CITIES =
   '(?:[臺台]北市|新北市|桃園市|[臺台]中市|[臺台]南市|高雄市|基隆市|新竹[市縣]|嘉義[市縣]|苗栗縣|彰化縣|南投縣|雲林縣|屏東縣|宜蘭縣|花蓮縣|[臺台]東縣|澎湖縣|金門縣|連江縣)';
 const DISTRICT = `(?:[${CJK}]{1,4}[鄉鎮市區])?`;
@@ -282,5 +311,19 @@ export const BUILTIN_PATTERNS            = [
     example: 'DOB: 1985-03-14、Date of Birth: March 14, 1985、出生日期：民國 80 年 5 月 1 日',
     enabled: true,
     validate: isBirthDate,
+  },
+  // jill_deid patch (PATCHES.md P1-5): built-in rule 16 (spec §5.2). Only URLs on the module's personal-page list
+  // match as a whole; other links are checked part by part (jill/uri-scan.js).
+  {
+    id: 'url',
+    name: '個人頁網址',
+    group: 'intl',
+    note: '只有模組設定「個人頁網址清單」上的網址整條命中（例如 facebook.com）；其他網址只檢查其中的個資',
+    category: URL_CATEGORY,
+    source: 'builtin',
+    regex: URL_REGEX,
+    example: 'https://www.facebook.com/wang.xiaoming',
+    enabled: true,
+    validate: personalUrlLength,
   },
 ];

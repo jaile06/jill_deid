@@ -36,7 +36,8 @@ function applySplit(item               , retention                       , book 
  * item whose kept characters change gets the code for its new split (see CodeBook).
  */
 export function resplitItems(items                 , book          , resolve                                              )       {
-  for (const it of items) applySplit(it, resolve(it), book);
+  // jill_deid patch (PATCHES.md P1-5): a fixed item (percent-encoded text, spec §5.3) is always hidden whole
+  for (const it of items) applySplit(it, it.fixed ? undefined : resolve(it), book);
 }
 
 export function compilePattern(p         )                {
@@ -104,7 +105,12 @@ export function scanPattern(text        , p         )              {
 
 /** Items (with codes from `book`) for resolved candidates. */
 export function toItems(text        , cands             , book          )                  {
-  return cands.map((c) => makeItem(text, c.start, c.end, c.category, book, 'auto', c.retention));
+  return cands.map((c) => {
+    if (!c.fixed) return makeItem(text, c.start, c.end, c.category, book, 'auto', c.retention);
+    const it = makeItem(text, c.start, c.end, c.category, book, 'auto'); // jill_deid patch (P1-5)
+    it.fixed = true;
+    return it;
+  });
 }
 
 export class OverlapError extends Error {

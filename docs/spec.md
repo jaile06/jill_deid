@@ -1,6 +1,6 @@
 ---
 title: "XOOPS 模組開發規格書：文件去識別化工具（jill_deid）"
-version: 3.7
+version: 3.8
 created: 2026-11-06
 updated: 2026-11-10
 upstream: "https://github.com/dean9703111/data-deidentification @ 1f7b9298f94a9728cf6d181f84cfcce48c39d968（2026-10-16，MIT）"
@@ -346,10 +346,18 @@ interface LinkTarget {
   displayRange?: [number, number];         // 對應 text 的顯示文字範圍，沒有就列在文件連結清單
   writable: boolean;                       // pdf 為 false：只偵測與提示
 }
-interface LinkHit { category: string; code: string; retention?: Retention }
-interface LinkDecision { linkId: string; action: 'rewrite' | 'strip' | 'keep'; uri?: string; hits: LinkHit[] }
-function scanUri(uri: string, patterns: Pattern[], book: CodeBook): LinkDecision;
+interface LinkHit { code: string; category: string; original: string; prefix?: string; suffix?: string } // 即 CSV 一列
+interface LinkDecision {
+  action: 'rewrite' | 'strip' | 'keep'; uri?: string; hits: LinkHit[];
+  warnings: ('undecodable' | 'host' | 'marker')[];  // 代碼，介面文字由 ui/ 修補提供（§4 i18n）
+  unrestorable: boolean;
+}
+function scanUri(uri: string, patterns: Pattern[], book: CodeBook,
+  opts?: { retentionOf?(cand): Retention | undefined; hyperlinkMode?: string; markerStyle?: string }): LinkDecision;
+function restoreUri(uri: string, mapping: MappingEntry[]): { uri: string; missingCodes: string[]; restoredCount: number };
 ```
+
+`linkId` 由格式寫回端（3b-2 起）自行對應，`scanUri` 只處理單一 URI。細節與文字層例外見 `docs/marker-in-uri.md`（v3.8，Phase 3b-1 建立）。
 
 格式解析器填 `links`；`formats/index.js` 的 `generateDocument` 收到 `LinkDecision[]` 後交給各格式寫回。URI 內的命中也要進 CSV，與內文共用同一個 `CodeBook`。
 
