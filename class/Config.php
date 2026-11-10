@@ -35,6 +35,7 @@ class Config
             $presets[]  = [
                 'id'            => (int) $p['id'],
                 'title'         => $p['title'],
+                'description'   => $p['description'],
                 'keepStrategy'  => $p['keep_strategy'],
                 'markerStyle'   => $p['marker_style'],
                 'hyperlinkMode' => $p['hyperlink_mode'],

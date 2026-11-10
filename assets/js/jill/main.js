@@ -1,11 +1,22 @@
 // Entry: mounts the upstream views (assets/js/upstream/ui/) inside the themed page (spec §6.1). Replaces
 // upstream main.ts without its header, author links and FAQ; the tab buttons come from the template.
 import { installTooltips } from '../upstream/ui/components.js';
-import { createProcessView, hasUnsavedResults, syncPatternChanges } from '../upstream/ui/process-view.js';
+import { createProcessView, hasUnsavedResults, setPresets, syncPatternChanges } from '../upstream/ui/process-view.js';
 import { createPatternsView } from '../upstream/ui/patterns-view.js';
 import { createRestoreView } from '../upstream/ui/restore-view.js';
+import { CATEGORIES } from '../upstream/core/types.js';
+import { setOrgPatterns } from '../upstream/core/pattern-store.js';
+import { config } from './config.js';
 
 const CREATE = { process: createProcessView, patterns: createPatternsView, restore: createRestoreView };
+
+// Module settings (spec §7) before any view exists: organisation rules join detection, presets set the output,
+// and their categories and the column-label categories join the closed upstream list (spec §4 core/types.js).
+for (const c of [...config.orgRules.map((r) => r.category), ...Object.values(config.columnLabels)]) {
+  if (!CATEGORIES.includes(c)) CATEGORIES.push(c);
+}
+setOrgPatterns(config.orgRules);
+setPresets(config.presets);
 
 // What upstream puts on <body> (tooltip, toasts, dialogs, OCR screen, add popup) goes here, inside the CSS scope.
 const portal = document.createElement('div');

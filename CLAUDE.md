@@ -12,7 +12,7 @@
 | 1a 骨架 | 已合併 main |
 | 1b 前端驗證 | 已合併 main（2026-11-10）：上游介面掛載於佈景、P0／P1 修補、瀏覽器測試 19/19、`tools/e2e.mjs` 兩個佈景 PASS（五種格式＋OCR、ZIP、HAR、斷網第二份 PDF） |
 | 2 後台 | 已合併 main（2026-11-10）：Rule、Preset、Config、後台樣板、規則包；使用者已更新模組並在後台操作確認 |
-| 3a 前端基礎 | 分支 `phase-3a`：單一 Worker 偵測、機構規則併入、欄首標籤偵測、上游測試移植 |
+| 3a 前端基礎 | 分支 `phase-3a`：單一 Worker 偵測（看門狗、fail closed）、機構規則併入、情境下拉與策略對照、欄首標籤偵測；瀏覽器 47/47＋3/3、e2e 兩個佈景 PASS（名冊 12/12）。上游測試移植移到 4d |
 
 ## 本模組特有的鐵則（spec 摘要，細節回 spec 查）
 
@@ -35,3 +35,4 @@
 - （Phase 2）命令列載入 XOOPS 時，`include/common.php` 以**工作目錄**有沒有 `xoops_version.php` 判斷是否在模組內；在模組目錄執行會渲染「模組不存在」頁並 exit。測試先 `chdir(sys_get_temp_dir())`。
 - （Phase 2）headless Chrome 的 `--virtual-time-budget` 會快轉計時器，Worker 看門狗會在 Worker 回應前觸發，測試時好時壞；瀏覽器測試一律用 `tools/browser-tests.mjs`（真實時間）。
 - （Phase 2）含反斜線的內容（regex、JSON、命名空間）用 Write／Edit 工具寫檔，不要經 shell heredoc 或 `node -e`，反斜線會被吃掉。
+- （Phase 3a）**每次偵測都新建 Worker 會讓斷網失敗**（同 pdf.js 的問題）：`no-cache` 下新 Worker 要重抓模組。長駐的東西（Worker）整頁共用；e2e 的斷網項目會抓到。

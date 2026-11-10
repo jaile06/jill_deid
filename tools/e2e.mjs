@@ -16,7 +16,9 @@ const site = process.env.JILL_DEID_SITE ?? 'http://localhost';
 const themes = process.argv.slice(2).length ? process.argv.slice(2) : ['school2022', 'xbootstrap5'];
 const out = join(tmpdir(), 'jill_deid_e2e');
 const samples = (names) => names.map((n) => join(root, 'assets', 'samples', n));
-const FIRST = samples(['contract.docx', 'quotation.pdf', 'scanned.pdf', 'customers.xlsx', 'meeting-notes.md', 'support-email.txt']);
+// roster.xlsx: fictitious roster with numeric 座號/學號 and surnames off the list; 12 items only with column labels (spec §6.5)
+const ROSTER = join(root, 'tests', 'browser', 'fixtures', 'roster.xlsx');
+const FIRST = [...samples(['contract.docx', 'quotation.pdf', 'scanned.pdf', 'customers.xlsx', 'meeting-notes.md', 'support-email.txt']), ROSTER];
 const OFFLINE = samples(['contract.pdf']);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -158,11 +160,13 @@ async function runTheme(theme) {
     }
 
     ws.close();
-    const ok = shownTheme === theme && !translate && files.length === FIRST.length && !!zip && offlineOk && harOk && problems.length === 0;
+    const rosterOk = files.some((f) => f.startsWith('roster.xlsx') && f.includes('12 / 12'));
+    const ok = rosterOk && shownTheme === theme && !translate && files.length === FIRST.length && !!zip && offlineOk && harOk && problems.length === 0;
     console.log([
       `== ${theme}: ${ok ? 'PASS' : 'FAIL'}`,
       `theme in page: ${shownTheme}; translate widget: ${translate ? 'PRESENT' : 'none'}`,
       ...files.map((f) => `  ${f}`),
+      `roster column detection: ${rosterOk ? 'ok' : 'FAILED'}`,
       `zip: ${zip ? `${zip} (${statSync(join(dir, 'downloads', zip)).size} bytes)` : 'MISSING'}`,
       `offline second PDF: ${offlineOk ? 'ok' : `FAILED ${offlineError}`}`,
       harReport.trim(),
