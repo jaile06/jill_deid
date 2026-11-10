@@ -1,8 +1,8 @@
 ---
 title: "XOOPS 模組開發規格書：文件去識別化工具（jill_deid）"
-version: 3.3
+version: 3.4
 created: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-10
 upstream: "https://github.com/dean9703111/data-deidentification @ 1f7b9298f94a9728cf6d181f84cfcce48c39d968（2026-10-16，MIT）"
 baseline: "E:\\my_xoops274\\www（XOOPS 2.7.4、Smarty 4.5.8、TadTools 4.0.8-Stable、PHP 8.3）"
 tags:
@@ -36,7 +36,7 @@ related_entities:
 4. 上游程式碼取 frontmatter 所列 commit。§A 是已對照原始碼的事實，與實際程式不符時停下來回報。
 5. 一次只做一個 Phase（§8），通過該 Phase 驗收才進下一個。
 6. 標 `【待確認】` 的值先照草案實作並集中放置，不要因此停工；其餘未定義的行為一律提問，不要自行決定。
-7. **已定案，不要重新提議**（2026-11-06 使用者確認）：前台為不套佈景的獨立頁；`mask_whole_url` 延後；基準為 XOOPS 2.7.4、PHP 8.3，不支援 2.5.11；資料表用 MyISAM；校務資料涵蓋學號、座號、員編、文號、身分證號、姓名、EMAIL（§6.4）；骨架由 `tad_xmod_maker` 產生；前台為 PHP＋原生 JS，開發與上線都不用 Node 建置（§4）。
+7. **已定案，不要重新提議**（2026-11-06 使用者確認；2026-11-10 修訂前台）：前台走一般 XOOPS 流程、套佈景，不做獨立頁、不送 CSP（§6.1）；`mask_whole_url` 延後；基準為 XOOPS 2.7.4、PHP 8.3，不支援 2.5.11；資料表用 MyISAM；校務資料涵蓋學號、座號、員編、文號、身分證號、姓名、EMAIL（§6.4）；骨架由 `tad_xmod_maker` 產生；前台為 PHP＋原生 JS，開發與上線都不用 Node 建置（§4）。
 8. §A 的路徑與行號指上游 TypeScript 原始碼；本模組對應檔案是 `assets/js/upstream/` 下的同名 `.js`。
 
 ---
@@ -88,7 +88,7 @@ related_entities:
 2. **誰能碰什麼**：有 `module_read` 的群組可用前台，個人規則只存瀏覽器。模組管理員（`module_admin`）管理機構規則與情境。
 3. **管不到的段落**：前端相依套件與 OCR 模型全部打包同站提供，禁止執行期連外。`locked` 規則只是操作防呆，不是安全邊界，因為使用者控制自己的瀏覽器。
 4. **不變量（MUST）**：
-   - **INV-1 零外傳**：前台頁面載入後，只允許同站 `GET` 靜態資產，不得有帶文件內容的請求。CSP 是縱深防禦，**不是保證**（`connect-src 'self'` 仍允許送往同站），驗收以 §9.1 實測為準。
+   - **INV-1 零外傳**：前台頁面載入後，只允許同站 `GET` 靜態資產，不得有帶文件內容的請求。前台套佈景，佈景與區塊的 JS 與文件內容同源、可讀取預覽內容，且無 CSP 可擋，**驗收完全以 §9.1 實測為準**；佈景、區塊有變動時須重跑。
    - **INV-2 超連結零殘留**：URI 命中個資時，§5.5 清單內的位置不得出現原值的原文、percent-encoded、XML escape、HTML entity 任一形式。
    - **INV-3 規則安全**：任何機構或自訂規則都不能讓分頁失去回應（§3.3）。
    - **INV-4 DB 無個資**：只存規則與情境；`sample_text` 只能放虛構範例，表單要提示。
@@ -117,7 +117,7 @@ PHP 相容要求：`declare(strict_types=1);`（`xoops_version.php`、語言檔�
 modules/jill_deid/
 ├── xoops_version.php
 ├── header.php / footer.php / interface.php
-├── index.php                 ← 前台獨立頁（§6.1）
+├── index.php                 ← 前台，一般 XOOPS 流程（§6.1）
 ├── admin/{menu,main,header,footer,about}.php
 ├── class/
 │   ├── Rule.php              ← CRUD、validate()（純函式，無 XOOPS 相依）、import_pack()
@@ -127,7 +127,7 @@ modules/jill_deid/
 │   └── Update.php
 ├── preloads/{autoloader,core}.php
 ├── templates/
-│   ├── jill_deid_app.tpl     ← 前台完整 HTML 文件，不套佈景
+│   ├── jill_deid_index.tpl   ← 前台內容樣板，標題從 h3 起
 │   ├── jill_deid_admin.tpl
 │   └── op_jill_deid_{rule,preset}_{index,form}.tpl
 ├── assets/
@@ -257,7 +257,7 @@ PHP 以白名單驗證：`head`、`tail` 為 0–20 整數；`delimiter` 1–3 �
 **一次性轉換**（`tools/strip-upstream.mjs`，執行者用現有的 Node 22.13 以上跑一次；結果提交進 repo，之後不再需要 Node）：
 
 1. 以 `node:module` 的 `stripTypeScriptTypes(src, {mode:'strip'})` 轉 `src/**/*.ts`。上游沒有 `enum`、`namespace` 或建構子參數屬性，去型別不改語意（已實測：30 檔全部成功，語法檢查 0 失敗）。
-2. 相對 import 補 `.js`（共 57 處）；套件 import 依下表改寫。**不可用 import map**，它是行內 script，會被 CSP 擋下。
+2. 相對 import 補 `.js`（共 57 處）；套件 import 依下表改寫。**不用 import map**：全部改寫成相對路徑，免得依賴頁面上的行內 script，日後要恢復 CSP 也不必改。
 3. **第一個 commit 只放未修改的轉換結果**，之後 `git diff` 才看得出對上游的修改。
 
 | 上游 | 本模組 |
@@ -283,7 +283,8 @@ PHP 以白名單驗證：`head`、`tail` 為 0–20 整數；`delimiter` 1–3 �
 
 | 檔案 | 修改 |
 |---|---|
-| `main.js` | 不引用，由 `jill/main.js` 取代：移除社群連結、FAQ、`innerHTML`、外部說明連結；頁籤補 `role="tablist"` 與方向鍵 |
+| `main.js` | 不引用，由 `jill/main.js` 取代：移除 `h1`、社群連結、FAQ、`innerHTML`、外部說明連結；頁籤補 `role="tablist"` 與方向鍵 |
+| `ui/*-view.js` | 分頁標題 `h2` 改 `h4`，以下層級依序下移（頁面標題為樣板的 `h3`，§6.1） |
 | `formats/pdf.js`、`formats/ocr.js`、`ui/samples.js` | 改用 `jill/assets.js` 的 `assetsBase`；pdf.js 若觸發 CSP eval 違規，加 `isEvalSupported:false` |
 | `core/types.js` | `CATEGORIES` 可於執行期加入機構類別與 `網址`；`LoadedDocument` 增加選用的 `links`（`LinkTarget[]`）。型別宣告已隨去型別移除，新程式以 JSDoc 標註 |
 | `core/retention.js` | `standardSplit` 增加 `case '網址'` |
@@ -410,28 +411,34 @@ function scanUri(uri: string, patterns: Pattern[], book: CodeBook): LinkDecision
 
 ## 6. 功能
 
-### 6.1 前台 `index.php`：獨立頁，不套佈景
+### 6.1 前台 `index.php`：一般 XOOPS 流程，套佈景
 
-**理由**：佈景有行內腳本，嚴格 CSP 會壞；更重要的是佈景與區塊的 JS 和文件內容同源，可讀取預覽內容，繞過「零外傳」。上游各分頁的 `h2` 也因此不必改。
+**決定**（2026-11-10 使用者修訂，取代原獨立頁方案）：前台與其他模組一致，走 `header.php`／`footer.php`、套佈景，不送 CSP。
+
+**代價（MUST 知悉）**：佈景與區塊的 JS 和文件內容同源，可讀取預覽內容；佈景有行內腳本，無法套嚴格 CSP。零外傳（INV-1）因此只能以 §9.1 HAR 實測把關，佈景或區塊有變動時須重跑。
 
 ```php
 <?php
+declare(strict_types=1);
 use XoopsModules\Jill_deid\Config;
 
-require_once __DIR__ . '/header.php';          // mainfile + interface；不載入 XOOPS_ROOT_PATH/header.php
-$GLOBALS['xoopsLogger']->activated = false;    // 避免除錯輸出注入行內內容
+require_once __DIR__ . '/header.php';
+header('Referrer-Policy: no-referrer');          // 須在 XOOPS header.php 輸出前送出
 
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'self'");
-header('Referrer-Policy: no-referrer');
+$GLOBALS['xoopsOption']['template_main'] = 'jill_deid_index.tpl';
+require_once XOOPS_ROOT_PATH . '/header.php';
 
-$tpl = new \XoopsTpl();
-$tpl->assign('deid_config_json', Config::toJson());
-$tpl->display('db:jill_deid_app.tpl');
+$xoopsTpl->assign('deid_config_json', Config::toJson());
+$xoTheme->addStylesheet('modules/jill_deid/assets/css/jill-deid-app.css');
+foreach (['jszip.min.js', 'fontkit.umd.min.js', 'libphonenumber-min.js'] as $js) {
+    $xoTheme->addScript("modules/jill_deid/assets/vendor/{$js}");
+}
+$xoTheme->addScript('modules/jill_deid/assets/js/jill/main.js', ['type' => 'module']);
+
+require_once XOOPS_ROOT_PATH . '/footer.php';
 ```
 
-`jill_deid_app.tpl` 是完整 HTML 文件，含：`<html lang>`、唯一的 `<h1>`、返回網站首頁連結、`<script id="jill-deid-config" type="application/json">`、CSS、`jszip`／`fontkit`／`libphonenumber` 三個傳統 `<script src>`，以及 `<script type="module" src="…/js/jill/main.js">`。
-
-**本頁為 convention §7「禁用 h1／h2」的明確例外**，xoops-lint 的 warn 以 `xoops-lint-ignore` 標註；後台樣板仍從 `<h3>` 起。
+`jill_deid_index.tpl` 只放內容區：`<h3>` 頁面標題、`<script id="jill-deid-config" type="application/json">`、掛載點。標題層級從 `<h3>` 起（convention §7），上游分頁 `h2` 依 §4 改為 `h4`。
 
 沿用上游三頁籤，新增：
 
@@ -534,7 +541,7 @@ $xoTheme->addScript('modules/tadtools/sweet-alert/sweet-alert.js');
 | Phase | 產出 | 完成條件 |
 |---|---|---|
 | 1a 骨架 | 以 `tad_xmod_maker` 產生（見下）、建 git repo、放入 `docs/spec.md` 與 `CLAUDE.md`，再依本文補齊 `strict_types`、語言常數 | 可安裝、移除、升級，E_ALL 0 警告，xoops-lint 0 error |
-| 1b 前端驗證 | §4 轉換與第三方檔案、`index.php` 獨立頁載入上游介面；確認全域變數、CSP、五種格式與 OCR；以 H15 確認上游 DOCX 殘留 | 不通過就停下回報，不進下一個 Phase |
+| 1b 前端驗證 | §4 轉換與第三方檔案、`index.php` 在佈景內載入上游介面；確認全域變數、與佈景 CSS／JS 無衝突、五種格式與 OCR；以 H15 確認上游 DOCX 殘留 | 不通過就停下回報，不進下一個 Phase |
 | 2 後台 | Rule、Preset、Config、admin 樣板、規則包、`tests/rule_validate_test.php` | §9.3 |
 | 3a 前端移植 | `jill/main.js`、assets、i18n、Worker 化、瀏覽器測試頁 | 移植的上游測試全過；§9.1 全過 |
 | 3b-1 URI 核心 | `uri-scan.js`、`url` 規則、還原 regex、合約文件 | H1–H3、H10、H13、H17–H19 |
@@ -545,7 +552,7 @@ $xoTheme->addScript('modules/tadtools/sweet-alert/sweet-alert.js');
 | 4 前台整合 | 情境、`🔗`、機構規則分組、範例、無障礙 | H11、§9.4 |
 | 5 驗收 | lint、斷網實測、Office 手動開檔 | §9 全勾 |
 
-**Phase 1a 的 maker 設定**（`modules/tad_xmod_maker/index.php?op=add_Form`）：目錄名 `jill_deid`；`min_xoops` 2.7.4；`min_php` **改成 8.3**（預設 8.2）；資料表依 §3。後台選單只建規則與情境頁，前台只留 `index.php`，不建區塊。**不使用 maker 的 CRUD 與表單程式碼**，`pattern` 用 `getText`、刪除走 POST 等要求依 §3、§6.2 手寫。maker 產出的前台 `index.php` 由 §6.1 的獨立頁取代。
+**Phase 1a 的 maker 設定**（`modules/tad_xmod_maker/index.php?op=add_Form`）：目錄名 `jill_deid`；`min_xoops` 2.7.4；`min_php` **改成 8.3**（預設 8.2）；資料表依 §3。後台選單只建規則與情境頁，前台只留 `index.php`，不建區塊。**不使用 maker 的 CRUD 與表單程式碼**，`pattern` 用 `getText`、刪除走 POST 等要求依 §3、§6.2 手寫。maker 產出的前台 `index.php` 依 §6.1 改寫。
 
 **每個 Phase 的循環**：開分支 → 先把驗收項目寫成測試 → 實作，小步 commit → `check.ps1`（xoops-lint、PHP 規則測試）與瀏覽器測試頁全過 → 合併，並把 AI 犯的錯記入 `CLAUDE.md`。
 
@@ -558,7 +565,7 @@ $xoTheme->addScript('modules/tadtools/sweet-alert/sweet-alert.js');
 - [ ] XOOPS 2.7.4＋PHP 8.3（`E:\my_xoops274`），`E_ALL` 下安裝、前後台操作 0 Error／Warning／Deprecated。
 - [ ] `php D:/workspace/02_Tools/xoops-lint/xoops-lint.php modules/jill_deid` 0 error。
 - [ ] DevTools 開 Preserve log，處理 5 種格式各一份並下載，匯出 HAR；`php tools/check-har.php <har> <樣本值檔>` 確認所有請求皆同站、`GET`、無 body，URL 不含樣本值。**不可用 grep CDN 字串驗收**，`tesseract.js` 內建預設網址字串必定命中。
-- [ ] 同一輪確認 CSP 下 5 種格式與 OCR 都能跑完，console 0 個 CSP violation。
+- [ ] 同一輪確認在站上實際使用的佈景（至少 `xswatch5`、`xbootstrap5`）內，5 種格式與 OCR 都能跑完，console 0 個錯誤；HAR 中佈景與區塊發出的請求同樣不得帶文件內容。
 - [ ] 所有模組與 worker 的回應 `Content-Type` 為 JavaScript，`assets/` 內沒有 `.mjs`。
 - [ ] 修改 `assets/js/` 任一檔案後一般重新整理（不清快取），瀏覽器會取得新版（§4 快取設定生效）。
 - [ ] 各功能各跑一次讓資產進快取後切 DevTools Offline，不重新整理，可完成去識別化與還原。
@@ -609,7 +616,7 @@ Fixture 優先沿用上游 `tests/helpers/docx-builder.ts`、`xlsx-builder.ts` �
 
 ### 9.4 無障礙與語言
 
-- [ ] 前台只有一個 `<h1>`、標題層級不跳階；後台無 `<h1>`、`<h2>`。
+- [ ] 前後台模組內容皆無 `<h1>`、`<h2>`，從 `<h3>` 起且層級不跳階。
 - [ ] `*.php`（語言檔除外）、`*.tpl` 無硬寫中文。
 - [ ] 互動元件 ≥ 44×44 px、文字對比 ≥ 4.5:1、純圖示按鈕有 `visually-hidden` 文字。
 - [ ] 鍵盤可完成整個流程；axe DevTools 0 個 serious／critical。
