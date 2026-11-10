@@ -1,12 +1,9 @@
 <?php
 
+declare(strict_types=1);
 
-function xoops_module_uninstall_jill_deid($module)
+// 資料表由核心依 $modversion['tables'] 移除；本模組沒有 uploads/ 要處理
+function xoops_module_uninstall_jill_deid(\XoopsModule $module): bool
 {
-    global $xoopsDB;
-    $date = date("Ymd");
-
-    rename(XOOPS_ROOT_PATH . "/uploads/jill_deid", XOOPS_ROOT_PATH . "/uploads/jill_deid_bak_{$date}");
-
     return true;
 }

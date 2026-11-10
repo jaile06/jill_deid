@@ -1,21 +1,13 @@
 <?php
-use XoopsModules\Tadtools\Utility;
-use XoopsModules\Jill_deid\Update;
 
-if (!class_exists('XoopsModules\Tadtools\Utility')) {
-    require XOOPS_ROOT_PATH . '/modules/tadtools/preloads/autoloader.php';
-}
+declare(strict_types=1);
+
 if (!class_exists('XoopsModules\Jill_deid\Update')) {
     require dirname(__DIR__) . '/preloads/autoloader.php';
 }
 
-
-
-function xoops_module_update_jill_deid($module, $old_version)
+function xoops_module_update_jill_deid(\XoopsModule $module, $old_version): bool
 {
-    global $xoopsDB;
-
-    //if(Update::chk_1()) Update::go_1();
-
+    // 升級步驟寫在 XoopsModules\Jill_deid\Update，例：if (Update::chk_1()) { Update::go_1(); }
     return true;
 }

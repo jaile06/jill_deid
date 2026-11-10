@@ -1,19 +1,12 @@
 <?php
 
+declare(strict_types=1);
 
 defined('XOOPS_ROOT_PATH') || die('Restricted access.');
 
-/**
- * Class Jill_deidCorePreload
- */
-class Jill_deidCorePreload extends XoopsPreloadItem
+class Jill_deidCorePreload extends \XoopsPreloadItem
 {
-    // to add PSR-4 autoloader
-
-    /**
-     * @param $args
-     */
-    public static function eventCoreIncludeCommonEnd($args)
+    public static function eventCoreIncludeCommonEnd($args): void
     {
         require __DIR__ . '/autoloader.php';
     }

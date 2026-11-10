@@ -1,12 +1,4 @@
-<div class="container-fluid" style="margin-bottom: 30px;">
-    <{if $now_op|default:false}>
-        <{include file="$xoops_rootpath/modules/$xoops_dirname/templates/op_`$now_op`.tpl"}>
-    <{/if}>
+<div class="container-fluid mb-4">
+    <h3><{$smarty.const._AM_JILLDEID_ADMIN_TITLE|escape}></h3>
+    <p><{$smarty.const._AM_JILLDEID_WIP|escape}></p>
 </div>
-
-<script>
-    $(document).ready(function(){
-        $('[data-toggle="tooltip"]').tooltip();
-        $('[data-bs-toggle="tooltip"]').tooltip();
-    });
-</script>
