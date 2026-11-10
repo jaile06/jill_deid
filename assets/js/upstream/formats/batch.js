@@ -59,10 +59,10 @@ export async function buildArchive(entries              , merged                
   const restorable = style === 'code';
   for (const { doc, items, redact } of entries) {
     // jill_deid patch (PATCHES.md P1-6): the view's redact() adds the link targets (spec §5.5)
-    const { edits, mapping } = redact ? redact(style) : applyRedactions(doc.text, items, style);
+    const { edits, mapping, links } = redact ? redact(style) : applyRedactions(doc.text, items, style);
     const output = unique(outputFileName(doc.fileName, 'deid'));
     const mappingName = restorable ? unique(mappingFileName(doc.fileName)) : '';
-    zip.file(output, await generateDocument(doc, edits));
+    zip.file(output, await generateDocument(doc, edits, links));
     if (restorable) zip.file(mappingName, serializeMapping(mapping));
     const row                   = { source: doc.fileName, output, mapping: mappingName, count: edits.length };
     if (items.some((it) => it.active && isPartial(it))) row.partial = true;

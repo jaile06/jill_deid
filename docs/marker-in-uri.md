@@ -68,6 +68,10 @@
   - 連結網址在 `text` 裡。偵測時以 `outsideLinks` 排除這些範圍；輸出時由 `redactWithLinks` 把 `scanUri` 的決定變成文字編輯，命中加入編碼表。
   - 手動項目落在網址內時該連結 `strip`，警示 `manual`。
   - 規則見 spec §5.5。
+- **DOCX**（`jill/links/docx.js`，Phase 3b-3）：
+  - 連結不在 `text` 裡，不必排除偵測。`parseDocx` 列出 `doc.links`（rels 每處引用、HYPERLINK 欄位碼），`redactDocxLinks` 逐一決定（tooltip 走一般偵測，編碼加入編碼表）。
+  - `generateDocx(doc, edits, links)` 寫回。
+  - rels 的 `Target` 存 XML 屬性，序列化時自動跳脫 `&`；欄位碼的網址寫成 `"…"`，去掉其中的 `"`。
 
 ## 7. 不涵蓋
 

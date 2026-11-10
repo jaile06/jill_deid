@@ -19,9 +19,12 @@ const samples = (names) => names.map((n) => join(root, 'assets', 'samples', n));
 // roster.xlsx: fictitious roster with numeric 座號/學號 and surnames off the list; 12 items only with column labels (spec §6.5)
 const ROSTER = join(root, 'tests', 'browser', 'fixtures', 'roster.xlsx');
 // links.md: fictitious Markdown links; its output in the archive must hold none of LINK_LEAKS (spec §5.5)
-const LINKS = join(root, 'tests', 'browser', 'fixtures', 'links.md');
-const LINK_LEAKS = ['A123456789', '%E5%B0%8F%E6%98%8E', '小明', 'wang.xm', 'wang.xiaoming'];
-const FIRST = [...samples(['contract.docx', 'quotation.pdf', 'scanned.pdf', 'customers.xlsx', 'meeting-notes.md', 'support-email.txt']), ROSTER, LINKS];
+// links.docx: made in Word by tools/make-links-docx.ps1 (hyperlinks, ScreenTip, header link, footnote, comment, author)
+const LINKS = ['links.md', 'links.docx'].map((n) => join(root, 'tests', 'browser', 'fixtures', n));
+const LINK_LEAKS = ['A123456789', '%E5%B0%8F%E6%98%8E', '小明', 'wang.xm', 'wang.xiaoming', 'chen.ml', '林志明', '測試作者'];
+const TAR = 'C:/Windows/System32/tar.exe'; // Git Bash's tar reads C: as a remote host
+const walkFiles = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walkFiles(join(d, e.name)) : [join(d, e.name)]));
+const FIRST = [...samples(['contract.docx', 'quotation.pdf', 'scanned.pdf', 'customers.xlsx', 'meeting-notes.md', 'support-email.txt']), ROSTER, ...LINKS];
 const OFFLINE = samples(['contract.pdf']);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -140,15 +143,30 @@ async function runTheme(theme) {
     await evaluate(`[...document.querySelectorAll('#jill-deid-app button')].find((b) => b.textContent.startsWith('打包下載全部')).click()`);
     for (let i = 0; i < 40 && !readdirSync(join(dir, 'downloads')).some((f) => f.endsWith('.zip')); i++) await sleep(500);
     const zip = readdirSync(join(dir, 'downloads')).find((f) => f.endsWith('.zip'));
+    // Fixture outputs: rewritten or stripped links depend on the site's default preset (hyperlink_mode); either way
+    // none of LINK_LEAKS may remain in any form, and Word must open the DOCX without repair (spec §9.2 H15).
+    const out = join(dir, 'out');
+    rmSync(out, { recursive: true, force: true });
+    mkdirSync(join(out, 'docx'), { recursive: true });
     let linksOut = '';
+    let wordReport = 'not run';
+    let wordOk = false;
     try {
-      linksOut = execFileSync('C:/Windows/System32/tar.exe', ['-xOf', join(dir, 'downloads', zip), 'links.deid.md'], { encoding: 'utf8' });
+      execFileSync(TAR, ['-xf', join(dir, 'downloads', zip), '-C', out, 'links.deid.md', 'links.deid.docx']);
+      execFileSync(TAR, ['-xf', join(out, 'links.deid.docx'), '-C', join(out, 'docx')]);
+      linksOut = [join(out, 'links.deid.md'), ...walkFiles(join(out, 'docx'))].map((f) => readFileSync(f, 'utf8')).join('\n');
+      try {
+        wordReport = execFileSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(root, 'tools', 'word-open.ps1'), join(out, 'links.deid.docx')], { encoding: 'utf8' }).trim();
+        wordOk = true;
+      } catch (e) {
+        wordReport = String(e.stdout ?? e.message).trim();
+      }
     } catch {
       linksOut = '';
     }
-    const linkLeaks = LINK_LEAKS.filter((v) => linksOut.includes(v));
-    // rewritten or stripped depends on the site's default preset (hyperlink_mode); either way nothing may remain
-    const linksOk = linksOut.includes('學籍') && linkLeaks.length === 0;
+    const forms = (v) => [v, encodeURIComponent(v), encodeURIComponent(v).replace(/%[0-9A-F]{2}/g, (m) => m.toLowerCase())];
+    const linkLeaks = LINK_LEAKS.filter((v) => forms(v).some((f) => linksOut.includes(f)));
+    const linksOk = linksOut.includes('學籍') && linksOut.includes('點此查看') && linkLeaks.length === 0 && wordOk;
 
     offline = true;
     await send('Network.emulateNetworkConditions', OFFLINE_ON);
@@ -179,7 +197,8 @@ async function runTheme(theme) {
       `theme in page: ${shownTheme}; translate widget: ${translate ? 'PRESENT' : 'none'}`,
       ...files.map((f) => `  ${f}`),
       `roster column detection: ${rosterOk ? 'ok' : 'FAILED'}`,
-      `markdown links: ${linksOk ? 'ok' : `FAILED ${linkLeaks.join(', ') || 'output missing'}`}`,
+      `link fixtures (md, docx): ${linksOk ? 'ok' : `FAILED ${linkLeaks.join(', ') || 'output missing or Word failed'}`}`,
+      `  word: ${wordReport}`,
       `zip: ${zip ? `${zip} (${statSync(join(dir, 'downloads', zip)).size} bytes)` : 'MISSING'}`,
       `offline second PDF: ${offlineOk ? 'ok' : `FAILED ${offlineError}`}`,
       harReport.trim(),

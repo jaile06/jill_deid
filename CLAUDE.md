@@ -15,7 +15,8 @@
 | 3a 前端基礎 | 已合併 main（2026-11-10）：單一 Worker 偵測（看門狗、fail closed）、機構規則併入、情境下拉與策略對照、欄首標籤偵測；瀏覽器 47/47＋3/3、e2e 兩個佈景 PASS（名冊 12/12）。上游測試移植移到 4d |
 | 3b-1 URI 核心 | 已合併 main（2026-11-10）：`jill/uri-scan.js`（`scanUri`、`restoreUri`、文字層編碼片段）、內建規則 16 `url`、`docs/marker-in-uri.md`；瀏覽器 62/62＋3/3、e2e 兩個佈景 PASS |
 | 3b-2 Markdown | 已合併 main（2026-11-10）：`jill/links/markdown.js`（連結網址排除一般偵測、輸出時 `scanUri` 改寫或 strip）、process-view `redact()` 統一輸出出口；瀏覽器 69/69＋3/3、e2e 兩個佈景 PASS（含 `links.md` 零殘留） |
-| 3b-3 DOCX | 下一步 |
+| 3b-3 DOCX | 已合併 main（2026-11-10）：`jill/links/docx.js`（rels 每處引用、欄位碼、tooltip、H7 新 rId）、殘留清除（Fallback、修訂、作者、people.xml、docProps）、註腳／尾註／註解納入掃描；H15 零殘留；瀏覽器 79/79＋3/3、e2e 兩個佈景 PASS（`links.docx` 經 Word 開檔驗證） |
+| 3b-4 XLSX | 下一步 |
 
 ## 本模組特有的鐵則（spec 摘要，細節回 spec 查）
 
@@ -41,3 +42,5 @@
 - （Phase 3a）**每次偵測都新建 Worker 會讓斷網失敗**（同 pdf.js 的問題）：`no-cache` 下新 Worker 要重抓模組。長駐的東西（Worker）整頁共用；e2e 的斷網項目會抓到。
 - （Phase 3b-1）**裸網址 regex 不能用排除式字元類**：`[^\s<>"']+` 會把緊接在網址後的中文（「。另見」）吞進網址，一併整條遮蔽。中文句子常不空格，網址只收 RFC 3986 字元。
 - （Phase 3b-2）**e2e 不可假設站台設定**：站上預設情境是 `strip_link`，連結被移除而非改寫；e2e 只驗「零殘留」，模式差異交給單元測試。Git Bash 的 `tar` 會把 `C:` 當遠端主機，解 zip 用 `C:/Windows/System32/tar.exe`。
+- （Phase 3b-3）**DOM 上分組改寫要從原始節點複製**：同一 rId 先改寫再 `cloneNode`，複本會帶著改寫後的值（H7 抓到）。另外，被刪除的節點不能當插入錨點（`rel.after` 對已移除節點無效）。
+- （Phase 3b-3）Word 以 COM `Fields.Add` 建的 HYPERLINK 欄位，存檔時會轉成 `w:hyperlink`；拆段欄位碼只能用合成測試（H16）。檢查真實姓名時，Windows 帳號名稱若是 `user` 這類常見字，會誤中 `w15:userId` 屬性名稱，要看命中處再判斷。

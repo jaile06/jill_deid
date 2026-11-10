@@ -2,6 +2,7 @@ import '../../../vendor/jszip.min.js';
 const JSZip = globalThis.JSZip;
                                                                                    
 import { distributeEdits,              } from './segments.js';
+import { docxLinks, scrubDocx, writeDocxLinks } from '../../jill/links/docx.js'; // jill_deid patch (PATCHES.md P1-7)
 
 const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const MC_NS = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
@@ -99,7 +100,9 @@ function extractPart(path        , doc          , offset        )               
 function partOrder(paths          )           {
   const main = paths.filter((p) => p === 'word/document.xml');
   const rest = paths.filter((p) => /^word\/(header|footer)\d*\.xml$/.test(p)).sort();
-  return [...main, ...rest];
+  // jill_deid patch (PATCHES.md P1-7): footnotes, endnotes and comments are scanned too (spec §5.5 DOCX 5)
+  const notes = ['word/footnotes.xml', 'word/endnotes.xml', 'word/comments.xml'].filter((p) => paths.includes(p));
+  return [...main, ...rest, ...notes];
 }
 
 export async function parseDocx(file      )                          {
@@ -119,9 +122,13 @@ export async function parseDocx(file      )                          {
     text += partText;
     if (!text.endsWith('\n')) text += '\n';
   }
-  const handle             = { zip, parts };
+  // jill_deid patch (PATCHES.md P1-7): link targets outside the text (spec §5.5 DOCX 1–3), with the original
+  // XML of the files they live in, so every download starts from the original.
+  const pristine = new Map();
+  const links = await docxLinks(zip, parts, pristine);
+  const handle             = { zip, parts, pristine };
   const layout = { kind: 'docx'         , paragraphs: parts.flatMap((p) => p.paragraphs) };
-  return { fileName: file.name, format: 'docx', text, handle, layout };
+  return { fileName: file.name, format: 'docx', text, handle, layout, links };
 }
 
 function serialize(doc          )         {
@@ -130,8 +137,11 @@ function serialize(doc          )         {
 }
 
 /** Every call works on a fresh clone of the pristine parts so repeated downloads stay correct. */
-export async function generateDocx(doc                , edits            )                {
+// jill_deid patch (PATCHES.md P1-7): `links` are the decided link targets ([{ link, decision }], see
+// jill/links/docx.js); residue (text-box fallback, tracked deletions, reviewer names, properties) is always removed.
+export async function generateDocx(doc                , edits            , links = [])                {
   const handle = doc.handle              ;
+  const clones = new Map();
   for (const part of handle.parts) {
     const partStart = part.segments[0]?.start ?? 0;
     const partEnd = part.segments.at(-1)?.end ?? 0;
@@ -147,7 +157,11 @@ export async function generateDocx(doc                , edits            )      
       node.textContent = newText;
       node.setAttributeNS(XML_NS, 'xml:space', 'preserve');
     }
-    handle.zip.file(part.path, serialize(cloneDoc));
+    clones.set(part.path, cloneDoc);
   }
+  for (const [path, xml] of handle.pristine ?? []) handle.zip.file(path, xml); // undo an earlier download
+  writeDocxLinks(handle.zip, clones, handle.pristine ?? new Map(), links);
+  await scrubDocx(handle.zip, clones);
+  for (const [path, cloneDoc] of clones) handle.zip.file(path, serialize(cloneDoc));
   return handle.zip.generateAsync({ type: 'blob', mimeType: DOCX_MIME, compression: 'DEFLATE' });
 }
