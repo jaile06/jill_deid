@@ -3,7 +3,7 @@
 //   <out-dir> defaults to assets/js/upstream next to this tool. Needs Node >= 22.13 (stripTypeScriptTypes).
 // Not used at runtime; excluded from release by .gitattributes.
 import { stripTypeScriptTypes } from 'node:module';
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, dirname, relative, resolve, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -67,10 +67,13 @@ for (const file of walk(srcRoot)) {
     return `import('${fromAssets(p.rel)}')`;
   });
 
-  // Relative specifiers get an explicit .js (browsers do no extension resolution)
+  // Relative specifiers get an explicit file (browsers do no extension or directory-index resolution)
   js = js.replace(/((?:\bfrom\s+|\bimport\s*\(\s*|^import\s+)')(\.\.?\/[^']+?)(?<!\.js)'/gm, (_, pre, spec) => {
+    const abs = resolve(dirname(file), spec);
+    const target = existsSync(`${abs}.ts`) ? `${spec}.js` : existsSync(join(abs, 'index.ts')) ? `${spec}/index.js` : null;
+    if (!target) throw new Error(`${relPath}: cannot resolve '${spec}'`);
     relFixed++;
-    return `${pre}${spec}.js'`;
+    return `${pre}${target}'`;
   });
 
   if (usesBase) js = `import { assetsBase } from '${fromAssets(ASSETS_JS)}';\n${js}`;

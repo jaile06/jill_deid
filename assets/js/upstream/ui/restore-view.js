@@ -2,7 +2,7 @@
 import { parseMarkers } from '../core/codes.js';
 import { parseMapping } from '../core/csv.js';
 import { restore,                    } from '../core/restorer.js';
-import { ACCEPT_ATTR, generateDocument, outputFileName, parseDocument } from '../formats.js';
+import { ACCEPT_ATTR, generateDocument, outputFileName, parseDocument } from '../formats/index.js';
 import { button, clear, downloadBlob, dropZone, el, rejectOversized, toast, withBusy } from './components.js';
 import { renderDocumentPreview,                 } from './preview.js';
 import { RESTORE_SAMPLE, fetchSample, sampleUrl } from './samples.js';

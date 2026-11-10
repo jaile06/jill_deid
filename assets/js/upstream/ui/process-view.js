@@ -6,7 +6,7 @@ import { CodeBook, parseMarkers } from '../core/codes.js';
 import { parseMapping, serializeMapping } from '../core/csv.js';
 import { getEffectivePatterns, loadConfig, saveConfig, setCategoryRetention } from '../core/pattern-store.js';
 import { MODE_LABELS, checkRetention, describeRetention, modesFor, splitFor,                    } from '../core/retention.js';
-import { ACCEPT_ATTR, formatLimitations, generateDocument, mappingFileName, outputFileName, parseDocument } from '../formats.js';
+import { ACCEPT_ATTR, formatLimitations, generateDocument, mappingFileName, outputFileName, parseDocument } from '../formats/index.js';
 import { button, clear, downloadBlob, dropZone, el, rejectOversized, toast, withBusy } from './components.js';
 import { renderDocumentPreview,                 } from './preview.js';
 import { MERGED_MAPPING_NAME, buildArchive } from '../formats/batch.js';
