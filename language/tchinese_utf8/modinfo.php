@@ -12,3 +12,6 @@ define('_MI_JILLDEID_TPL_INDEX', '前台主頁');
 define('_MI_JILLDEID_TPL_ADMIN', '後台外框');
 define('_MI_JILLDEID_URL_PERSONAL_HOSTS', '個人頁網址清單');
 define('_MI_JILLDEID_URL_PERSONAL_HOSTS_DESC', '一行一筆，格式 domain[/pathPrefix]。命中清單的網址整條視為個資遮蔽；domain 以尾端比對（含 www.、m. 等子網域）。');
+define('_MI_JILLDEID_COLUMN_LABELS', '欄首標籤');
+define('_MI_JILLDEID_COLUMN_LABELS_DESC', '一行一筆「標籤=類別」。Excel 或 Word 表格的欄首是這些標籤時，整欄視為該類別（可抓到純數字的學號、座號與表外姓氏）。');
+define('_MI_JILLDEID_COLUMN_LABELS_DEFAULT', "姓名=姓名\n學生姓名=姓名\n家長姓名=姓名\n監護人=姓名\n導師=姓名\n學號=學號\n座號=座號\n身分證=身分證\n身分證字號=身分證\n身分證統一編號=身分證\n出生日期=生日\n生日=生日\n手機=手機\n行動電話=手機\n電話=市話\n聯絡電話=市話\n地址=地址\n住址=地址\n通訊地址=地址\n戶籍地址=地址\n電子郵件=電子郵件\nEMAIL=電子郵件\n員工編號=員編");

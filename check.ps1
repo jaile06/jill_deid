@@ -17,14 +17,10 @@ Get-ChildItem "$root\tests" -Filter *_test.php -ErrorAction SilentlyContinue | F
     if ($LASTEXITCODE -ne 0) { $fail++ }
 }
 
-# Browser test page (spec §9.2) through headless Chrome; needs the local site at $url
-$chrome = 'C:\Program Files\Google\Chrome\Application\chrome.exe'
+# Browser test page (spec §9.2) in headless Chrome, real time; needs the local site and Node >= 22
 $url = if ($env:JILL_DEID_TEST_URL) { $env:JILL_DEID_TEST_URL } else { 'http://localhost/modules/jill_deid/tests/browser/index.html' }
-if (Test-Path $chrome) {
-    $dom = & $chrome --headless=new --disable-gpu --no-first-run --log-level=3 "--user-data-dir=$env:TEMP\jill_deid_chrome" --virtual-time-budget=600000 --dump-dom $url | Out-String
-    ([regex]::Matches($dom, '<li[^>]*>([^<]*)</li>') | ForEach-Object { $_.Groups[1].Value }) -match '^FAIL' | ForEach-Object { Write-Host $_ -ForegroundColor Red }
-    if ($dom -notmatch '<title>PASS</title>') { Write-Host "browser tests: $([regex]::Match($dom, '<title>([^<]*)').Groups[1].Value) ($url)"; $fail++ }
-} else { Write-Host "browser tests: Chrome not found at $chrome"; $fail++ }
+& node "$root\tools\browser-tests.mjs" $url
+if ($LASTEXITCODE -ne 0) { $fail++ }
 
 if ($fail) { Write-Host "check.ps1: $fail check(s) failed" -ForegroundColor Red; exit 1 }
 Write-Host 'check.ps1: all passed' -ForegroundColor Green

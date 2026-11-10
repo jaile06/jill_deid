@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use XoopsModules\Jill_deid\Config;
+
 require_once __DIR__ . '/header.php';
 
 // 佈景含行內腳本，無法套嚴格 CSP；只送 Referrer-Policy，避免連結帶出本頁網址
@@ -18,7 +20,7 @@ foreach ($xoopsTpl->getTemplateVars() as $name => $value) {
     }
 }
 
-// ponytail: Config::toJson()（§7）於 Phase 2 加入
+$xoopsTpl->assign('deid_config_json', Config::toJson());
 // upstream.css 由轉換工具產生（限定在 #jill-deid-app 內）；jill_deid.css 補佈景 Bootstrap 的同名 class
 $xoTheme->addStylesheet('modules/jill_deid/assets/css/upstream.css');
 $xoTheme->addStylesheet('modules/jill_deid/assets/css/jill_deid.css');

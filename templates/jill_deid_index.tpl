@@ -8,3 +8,5 @@
   </nav>
   <div class="panels"></div>
 </div>
+<{* 設定 JSON（spec §7）：json_encode 已用 JSON_HEX_TAG 等旗標，直接輸出 *}>
+<script type="application/json" id="jill-deid-config"><{$deid_config_json}></script>

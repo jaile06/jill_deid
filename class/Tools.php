@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace XoopsModules\Jill_deid;
 
+use XoopsModules\Tadtools\Utility;
+
 /**
  * 由 dinfo Tools 精簡：只留欄位過濾與 SQL 組裝。
  * 權限一律在入口檔以 $xoopsUser->isAdmin($xoopsModule->mid()) 判斷，不經 $_SESSION（規格 §6.3）。
@@ -82,6 +84,45 @@ class Tools
     public static function get_view_col(array $view_cols = [], string $prefix = ''): string
     {
         return empty($view_cols) ? $prefix . '*' : $prefix . '`' . implode("`, {$prefix}`", $view_cols) . '`';
+    }
+
+    // 整張表依 sort、id 取出（規則、情境都只有數十筆，不分頁）；$where 只能由程式組成
+    public static function rows(string $table, string $where = ''): array
+    {
+        global $xoopsDB;
+        $sql    = 'SELECT * FROM `' . $xoopsDB->prefix($table) . "` {$where} ORDER BY `sort`, `id`";
+        $result = $xoopsDB->query($sql) or Utility::web_error($sql, __FILE__, __LINE__);
+        $rows   = [];
+        while ($row = $xoopsDB->fetchArray($result)) {
+            $rows[] = $row;
+        }
+        return $rows;
+    }
+
+    // 新增（$id 為 0）或更新一筆，回傳 id。欄位名來自類別常數，值先經 filter('write') 跳脫
+    public static function save(string $table, array $data, array $filter_arr, int $id = 0): int
+    {
+        global $xoopsDB;
+        $d   = self::filter_all_data('write', $data, $filter_arr);
+        $set = implode(', ', array_map(static fn (string $k): string => "`{$k}` = '{$d[$k]}'", array_keys($d)));
+        $tbl = $xoopsDB->prefix($table);
+        $sql = $id ? "UPDATE `{$tbl}` SET {$set} WHERE `id` = {$id}" : "INSERT INTO `{$tbl}` SET {$set}";
+        $xoopsDB->exec($sql) or Utility::web_error($sql, __FILE__, __LINE__);
+        return $id ?: (int) $xoopsDB->getInsertId();
+    }
+
+    public static function delete(string $table, int $id): void
+    {
+        global $xoopsDB;
+        $sql = 'DELETE FROM `' . $xoopsDB->prefix($table) . "` WHERE `id` = {$id}";
+        $xoopsDB->exec($sql) or Utility::web_error($sql, __FILE__, __LINE__);
+    }
+
+    public static function toggle(string $table, int $id): void
+    {
+        global $xoopsDB;
+        $sql = 'UPDATE `' . $xoopsDB->prefix($table) . "` SET `enable` = IF(`enable` = '1', '0', '1') WHERE `id` = {$id}";
+        $xoopsDB->exec($sql) or Utility::web_error($sql, __FILE__, __LINE__);
     }
 
     // 組 ORDER BY；方向只允許 ASC／DESC

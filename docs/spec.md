@@ -127,15 +127,18 @@ modules/jill_deid/
 │   ├── Config.php            ← 組前台設定 JSON（§7）
 │   ├── Tools.php             ← 由 dinfo 精簡
 │   └── Update.php
+├── include/{rule_pack.json,categories.json}  ← 規則包（§6.4）與保留類別（上游 CATEGORIES＋網址），PHP 不寫死中文
 ├── preloads/{autoloader,core}.php
 ├── templates/
 │   ├── jill_deid_index.tpl   ← 前台外框：h3 標題、分頁按鈕與使用說明連結（語言常數）、#jill-deid-app、設定 JSON
 │   ├── jill_deid_admin.tpl
+│   ├── sub_jill_deid_post.tpl ← 刪除／切換／匯入共用的 POST 表單＋SweetAlert 確認（§6.2）
 │   └── op_jill_deid_{rule,preset}_{index,form}.tpl
 ├── assets/
 │   ├── js/upstream/{core,formats,ui}/*.js   ← 上游去型別後的程式，含介面（§4）；修改逐條記入 PATCHES.md
 │   ├── js/jill/              ← 本模組前端，見下
 │   │   ├── main.js           ← 進入點：取代上游 main.ts，建立 #jill-deid-portal、掛載上游三個分頁
+│   │   ├── admin-rule.js     ← 後台規則表單：保留方式 JSON、Worker 試跑與壓力測試（§3.3-6）
 │   │   ├── columns.js        ← 欄首標籤偵測（§6.5，純函式）
 │   │   └── assets.js、uri-scan.js、links/*、regex.worker.js（§3.3，前後台共用）
 │   ├── vendor/               ← 第三方現成檔，勿手改；由用到的模組自行 import（§4），index.php 不載入
@@ -145,9 +148,10 @@ modules/jill_deid/
 │   ├── .htaccess             ← 快取設定（§4）
 │   └── THIRD_PARTY_NOTICES.txt
 ├── docs/{spec.md,PATCHES.md,VENDOR.md,marker-in-uri.md}
-├── tools/{strip-upstream.mjs,check-har.php,e2e.mjs,make-h15.ps1}
+├── tools/{strip-upstream.mjs,check-har.php,e2e.mjs,browser-tests.mjs,make-h15.ps1}
 ├── tests/
 │   ├── rule_validate_test.php   ← 純 assert，免 XOOPS、免 PHPUnit
+│   ├── admin_db_test.php        ← 命令列載入本機 XOOPS，測 DB 往返、預設情境唯一、規則包、樣板渲染（§9.3），結束時清除
 │   └── browser/                 ← 瀏覽器測試頁（§9.2）：index.html、runner.js、patches.test.js（§4 修補）、§9.2 向量、leak-check.js、fixtures/、upstream/
 ├── CLAUDE.md、check.ps1
 ├── language/{tchinese_utf8,english}/{modinfo,main,admin}.php（english SHOULD，至少 modinfo）
@@ -213,12 +217,12 @@ CREATE TABLE `jill_deid_preset` (
 **`Rule::validate(array $data): array`** 回傳錯誤訊息陣列，不碰 `$xoopsDB`：
 
 1. `pattern`：`mb_strlen` 1–500；不含換行、NUL。
-2. 拒絕災難性回溯結構：巢狀量詞（`(a+)+`、`(\w*)*`、`(.*){2,}`）、可重疊交替後接量詞（`(a|a)+`）、反向引用 `\1`。以 regex 黑名單實作，lookbehind 不算違規。
+2. 拒絕災難性回溯結構：巢狀量詞（`(a+)+`、`(\w*)*`、`(.*){2,}`、`(a+){5}`）、可重疊交替後接量詞（`(a|a)+`）、反向引用 `\1`、`\k<名稱>`。實作為掃描括號的黑名單（`Rule::riskyPattern()`）：群組內有長度可變的量詞，且群組本身再重複（含 `{n}`、n > 1），才算巢狀；內層固定寬度的 `(\d{3}-){2}` 放行；lookbehind 不算違規。黑名單不求完備，真正的保護是 Worker 逾時與表單壓力測試。
 3. 空字串：`@preg_match('/' . str_replace('/', '\/', $p) . '/u', '')` 回傳 `1` 就拒絕；回傳 `false` 代表 PCRE 不支援該語法，不算錯，交給第 6 點。
 4. `category`：`preg_match('/^[^\[\]:\s]{1,10}$/u', ...)`（**必須 `/u`**，否則以位元組計算，4 個中文字就超過），且不得與內建類別或保留字 `網址` 同名。
 5. `retention`：通過 §3.4。
 
-6. **後台表單 JS（輔助）**：沿用上游 `validateRegex`（`new RegExp(p,'gu')`、不可匹配空字串）；在 `regex.worker.js` 內以 `sample_text` 試跑，零命中拒絕送出；再以壓力字串（`sample_text` 重複 500 次、`'a'.repeat(5000)+'!'`、`'1'.repeat(5000)`、`' '.repeat(5000)`）各跑一次，任一超過 200 ms 拒絕送出。小樣本跑得快不代表大檔不會回溯失控。
+6. **後台表單 JS（輔助）**：沿用上游 `validateRegex`（`new RegExp(p,'gu')`、不可匹配空字串）；在 `regex.worker.js` 內以 `sample_text` 試跑，零命中拒絕送出；再以壓力字串（`sample_text` 重複 500 次、`'a'.repeat(5000)+'!'`、`'1'.repeat(5000)`、`' '.repeat(5000)`）各跑一次，任一超過 200 ms 拒絕送出（時間由 Worker 自己量；主執行緒 2 秒強制終止，視為過慢）。小樣本跑得快不代表大檔不會回溯失控，例如 `\d+\d+\d+\d+x` 能通過黑名單，但在 5,000 個 `1` 上會失控（`tests/browser/admin-rule.test.js`）。
 
 **前台執行（MUST）**：整段偵測（內建＋機構＋個人規則）在**單一 module worker**（`assets/js/jill/regex.worker.js`，`new Worker(url, {type:'module'})`）執行，主執行緒不跑任何 regex。Worker 直接 import `core/patterns.js` 取得內建規則與 `validate`；主執行緒只送 `{text, builtinIds, extra:[{id,regex,category,retention}]}`，全文每份只送一次。流程：
 
@@ -650,6 +654,8 @@ EMAIL=電子郵件
 }
 ```
 
+- `i18n` 物件於 `assets/js/jill/` 需要動態訊息時才加入（目前前台文字都在上游 `ui/` 與樣板）。
+- 模組設定 `column_labels` 尚未生效（新增設定項後未按「更新模組」）時，`Config` 退回語言常數 `_MI_JILLDEID_COLUMN_LABELS_DEFAULT`。
 - 規則合併順序：內建 → 機構 → 個人。`disabledBuiltins` 可停用 `org-*`，`locked:true` 除外。
 - 解析失敗時以空 `orgRules`、`presets` 運作並警告，不中斷。
 
@@ -739,6 +745,7 @@ Fixture 優先沿用上游 `tests/helpers/docx-builder.ts`、`xlsx-builder.ts` �
 
 ### 9.3 後台
 
+- [ ] 自動化對照：第 1 項 `tests/rule_validate_test.php`；第 2 項 `tests/browser/rulepack.test.js`（lookbehind 須用瀏覽器 RegExp）；第 3、6 項與後台樣板 `tests/admin_db_test.php`；表單試跑 `tests/browser/admin-rule.test.js`。第 4 項於 Phase 4b 驗收；第 5 項需登入後台手動確認。
 - [ ] `php tests/rule_validate_test.php`：`(a+)+$`、`(\w*)*x`、`\1`、空字串匹配、`category` 含 `:`、11 字類別、內建類別 `姓名` 皆被拒；8 字中文類別、§6.4 全部 pattern 皆通過。
 - [ ] 匯入規則包後，§6.4 七類各以一筆同行標籤的虛構資料測試，全部命中，含 6、7 碼學號、1、2 碼座號與兩種文號。下列不命中：`學費 150000 元`、`座號 123`、`學號 11500123`，且員編規則不得命中 `A123456789`。內文 `?sid=112001 請查閱。` 只命中 `112001`。
 - [ ] 實際從表單儲存 `(?<!\d)1\d{5}` 與 `(?<y>\d{4})`，DB 內字串與輸入**完全相同**。
