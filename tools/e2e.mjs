@@ -19,8 +19,9 @@ const samples = (names) => names.map((n) => join(root, 'assets', 'samples', n));
 // roster.xlsx: fictitious roster with numeric 座號/學號 and surnames off the list; 12 items only with column labels (spec §6.5)
 const ROSTER = join(root, 'tests', 'browser', 'fixtures', 'roster.xlsx');
 // links.md: fictitious Markdown links; its output in the archive must hold none of LINK_LEAKS (spec §5.5)
-// links.docx: made in Word by tools/make-links-docx.ps1 (hyperlinks, ScreenTip, header link, footnote, comment, author)
-const LINKS = ['links.md', 'links.docx'].map((n) => join(root, 'tests', 'browser', 'fixtures', n));
+// links.docx / links.xlsx: made in Word / Excel by tools/make-links-{docx,xlsx}.ps1 (hyperlinks, ScreenTips, HYPERLINK
+// formula, header link, footnote, comments, author)
+const LINKS = ['links.md', 'links.docx', 'links.xlsx'].map((n) => join(root, 'tests', 'browser', 'fixtures', n));
 const LINK_LEAKS = ['A123456789', '%E5%B0%8F%E6%98%8E', '小明', 'wang.xm', 'wang.xiaoming', 'chen.ml', '林志明', '測試作者'];
 const TAR = 'C:/Windows/System32/tar.exe'; // Git Bash's tar reads C: as a remote host
 const walkFiles = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walkFiles(join(d, e.name)) : [join(d, e.name)]));
@@ -144,19 +145,19 @@ async function runTheme(theme) {
     for (let i = 0; i < 40 && !readdirSync(join(dir, 'downloads')).some((f) => f.endsWith('.zip')); i++) await sleep(500);
     const zip = readdirSync(join(dir, 'downloads')).find((f) => f.endsWith('.zip'));
     // Fixture outputs: rewritten or stripped links depend on the site's default preset (hyperlink_mode); either way
-    // none of LINK_LEAKS may remain in any form, and Word must open the DOCX without repair (spec §9.2 H15).
+    // none of LINK_LEAKS may remain in any form, and Word / Excel must open the DOCX / XLSX without repair (spec §9.2 H15).
     const out = join(dir, 'out');
     rmSync(out, { recursive: true, force: true });
-    mkdirSync(join(out, 'docx'), { recursive: true });
+    for (const x of ['docx', 'xlsx']) mkdirSync(join(out, x), { recursive: true });
     let linksOut = '';
     let wordReport = 'not run';
     let wordOk = false;
     try {
-      execFileSync(TAR, ['-xf', join(dir, 'downloads', zip), '-C', out, 'links.deid.md', 'links.deid.docx']);
-      execFileSync(TAR, ['-xf', join(out, 'links.deid.docx'), '-C', join(out, 'docx')]);
-      linksOut = [join(out, 'links.deid.md'), ...walkFiles(join(out, 'docx'))].map((f) => readFileSync(f, 'utf8')).join('\n');
+      execFileSync(TAR, ['-xf', join(dir, 'downloads', zip), '-C', out, 'links.deid.md', 'links.deid.docx', 'links.deid.xlsx']);
+      for (const x of ['docx', 'xlsx']) execFileSync(TAR, ['-xf', join(out, `links.deid.${x}`), '-C', join(out, x)]);
+      linksOut = [join(out, 'links.deid.md'), ...walkFiles(join(out, 'docx')), ...walkFiles(join(out, 'xlsx'))].map((f) => readFileSync(f, 'utf8')).join('\n');
       try {
-        wordReport = execFileSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(root, 'tools', 'word-open.ps1'), join(out, 'links.deid.docx')], { encoding: 'utf8' }).trim();
+        wordReport = execFileSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(root, 'tools', 'office-open.ps1'), join(out, 'links.deid.docx'), join(out, 'links.deid.xlsx')], { encoding: 'utf8' }).trim();
         wordOk = true;
       } catch (e) {
         wordReport = String(e.stdout ?? e.message).trim();
@@ -168,12 +169,18 @@ async function runTheme(theme) {
     const linkLeaks = LINK_LEAKS.filter((v) => forms(v).some((f) => linksOut.includes(f)));
     const linksOk = linksOut.includes('學籍') && linksOut.includes('點此查看') && linkLeaks.length === 0 && wordOk;
 
+    // upstream takes at most 10 files at a time: make room for the offline PDF (all were downloaded, so no prompt)
+    const room = Math.max(0, FIRST.length + OFFLINE.length - 10);
+    for (let i = 0; i < room; i++) await evaluate(`document.querySelector('#jill-deid-app .file-item-remove').click()`);
+    await waitFor(`${fileCount} === ${FIRST.length - room}`, 10000, 'removing a file');
+    const expected = FIRST.length - room + OFFLINE.length;
+
     offline = true;
     await send('Network.emulateNetworkConditions', OFFLINE_ON);
     const errorsBefore = await evaluate(`document.querySelectorAll('#jill-deid-portal .toast-error').length`);
     await chooseFiles(OFFLINE);
-    await waitFor(`(${fileCount} === ${FIRST.length + 1} || document.querySelectorAll('#jill-deid-portal .toast-error').length > ${errorsBefore}) && ${idle}`, 60000, 'the offline PDF');
-    const offlineOk = await evaluate(`${fileCount} === ${FIRST.length + 1}`);
+    await waitFor(`(${fileCount} === ${expected} || document.querySelectorAll('#jill-deid-portal .toast-error').length > ${errorsBefore}) && ${idle}`, 60000, 'the offline PDF');
+    const offlineOk = await evaluate(`${fileCount} === ${expected}`);
     const offlineError = await evaluate(`[...document.querySelectorAll('#jill-deid-portal .toast-error')].map((t) => t.textContent).join(' | ')`);
 
     const har = join(dir, `${theme}.har`);
@@ -197,8 +204,8 @@ async function runTheme(theme) {
       `theme in page: ${shownTheme}; translate widget: ${translate ? 'PRESENT' : 'none'}`,
       ...files.map((f) => `  ${f}`),
       `roster column detection: ${rosterOk ? 'ok' : 'FAILED'}`,
-      `link fixtures (md, docx): ${linksOk ? 'ok' : `FAILED ${linkLeaks.join(', ') || 'output missing or Word failed'}`}`,
-      `  word: ${wordReport}`,
+      `link fixtures (md, docx, xlsx): ${linksOk ? 'ok' : `FAILED ${linkLeaks.join(', ') || 'output missing or Office failed'}`}`,
+      ...wordReport.split(/\r?\n/).map((l) => `  office: ${l.trim()}`),
       `zip: ${zip ? `${zip} (${statSync(join(dir, 'downloads', zip)).size} bytes)` : 'MISSING'}`,
       `offline second PDF: ${offlineOk ? 'ok' : `FAILED ${offlineError}`}`,
       harReport.trim(),

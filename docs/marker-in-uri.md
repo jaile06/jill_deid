@@ -69,9 +69,13 @@
   - 手動項目落在網址內時該連結 `strip`，警示 `manual`。
   - 規則見 spec §5.5。
 - **DOCX**（`jill/links/docx.js`，Phase 3b-3）：
-  - 連結不在 `text` 裡，不必排除偵測。`parseDocx` 列出 `doc.links`（rels 每處引用、HYPERLINK 欄位碼），`redactDocxLinks` 逐一決定（tooltip 走一般偵測，編碼加入編碼表）。
+  - 連結不在 `text` 裡，不必排除偵測。`parseDocx` 列出 `doc.links`（rels 每處引用、HYPERLINK 欄位碼），`redactLinks`（`links/rels.js`）逐一決定（tooltip 等文字以 `detectShort` 偵測，編碼加入編碼表）。
   - `generateDocx(doc, edits, links)` 寫回。
   - rels 的 `Target` 存 XML 屬性，序列化時自動跳脫 `&`；欄位碼的網址寫成 `"…"`，去掉其中的 `"`。
+
+- **XLSX**（`jill/links/xlsx.js`，Phase 3b-4）：
+  - 工作表 `<hyperlink>` 的 rels 目標與 `display`、`tooltip`、`location`，內部連結的同樣文字，以及 `HYPERLINK("url","名稱")` 公式。
+  - 公式的網址寫回時 `"` 寫成 `""`；快取的 `<v>` 一併改寫。
 
 ## 7. 不涵蓋
 

@@ -2,7 +2,7 @@
 
 - **唯一事實來源**：`docs/spec.md`（規格書 v3.8）。與 convention 衝突以 spec 為準。
 - 通用規範：`g:\我的雲端硬碟\note\Templates\開發範本\OpenSpec-XOOPS-convention.md`、`XOOPS-安全開發檢查清單.md`。
-- 一次只做一個 Phase（spec §8），每個 Phase 一個分支；合併前 `./check.ps1` 全過（含 headless Chrome 跑 `tests/browser/`，需本機站台），並跑 `node tools/e2e.mjs`（兩個佈景的實際流程＋HAR＋斷網）。
+- 一次只做一個 Phase（spec §8），每個 Phase 一個分支；合併前 `./check.ps1` 全過（含 headless Chrome 跑 `tests/browser/`，需本機站台），並跑 `node tools/e2e.mjs`（兩個佈景的實際流程＋HAR＋斷網＋Word／Excel 開檔）。
 - PHP：`E:\my_xoops274\core\php83\php.exe`；lint：`php D:/workspace/02_Tools/xoops-lint/xoops-lint.php .`
 
 ## 目前進度
@@ -16,7 +16,8 @@
 | 3b-1 URI 核心 | 已合併 main（2026-11-10）：`jill/uri-scan.js`（`scanUri`、`restoreUri`、文字層編碼片段）、內建規則 16 `url`、`docs/marker-in-uri.md`；瀏覽器 62/62＋3/3、e2e 兩個佈景 PASS |
 | 3b-2 Markdown | 已合併 main（2026-11-10）：`jill/links/markdown.js`（連結網址排除一般偵測、輸出時 `scanUri` 改寫或 strip）、process-view `redact()` 統一輸出出口；瀏覽器 69/69＋3/3、e2e 兩個佈景 PASS（含 `links.md` 零殘留） |
 | 3b-3 DOCX | 已合併 main（2026-11-10）：`jill/links/docx.js`（rels 每處引用、欄位碼、tooltip、H7 新 rId）、殘留清除（Fallback、修訂、作者、people.xml、docProps）、註腳／尾註／註解納入掃描；H15 零殘留；瀏覽器 79/79＋3/3、e2e 兩個佈景 PASS（`links.docx` 經 Word 開檔驗證） |
-| 3b-4 XLSX | 下一步 |
+| 3b-4 XLSX | 已合併 main（2026-11-10）：`jill/links/xlsx.js`（工作表超連結、內部連結、`HYPERLINK()` 公式、calcChain）、rels 引擎抽成 `links/rels.js` 與 DOCX 共用、註解與作者清除、`detectShort`；瀏覽器 89/89＋3/3、e2e 兩個佈景 PASS（`links.xlsx` 經 Excel 開檔驗證） |
+| 3b-5 PDF＋還原核心 | 下一步 |
 
 ## 本模組特有的鐵則（spec 摘要，細節回 spec 查）
 
@@ -44,3 +45,6 @@
 - （Phase 3b-2）**e2e 不可假設站台設定**：站上預設情境是 `strip_link`，連結被移除而非改寫；e2e 只驗「零殘留」，模式差異交給單元測試。Git Bash 的 `tar` 會把 `C:` 當遠端主機，解 zip 用 `C:/Windows/System32/tar.exe`。
 - （Phase 3b-3）**DOM 上分組改寫要從原始節點複製**：同一 rId 先改寫再 `cloneNode`，複本會帶著改寫後的值（H7 抓到）。另外，被刪除的節點不能當插入錨點（`rel.after` 對已移除節點無效）。
 - （Phase 3b-3）Word 以 COM `Fields.Add` 建的 HYPERLINK 欄位，存檔時會轉成 `w:hyperlink`；拆段欄位碼只能用合成測試（H16）。檢查真實姓名時，Windows 帳號名稱若是 `user` 這類常見字，會誤中 `w15:userId` 屬性名稱，要看命中處再判斷。
+- （Phase 3b-4）**站台設定會遮住另一條路徑**：預設情境是 `strip_link`，e2e 只走過「移除連結」；一次性的「改寫網址」檢查才發現 `display` 屬性裡編碼過的姓名外洩。兩種模式都要有測試：改寫模式由單元測試處理同一份 Office 範例檔。
+- （Phase 3b-4）**Excel 存檔的作者取自 Office 帳號**：`UserName` 只影響註解作者，`dc:creator`、`cp:lastModifiedBy` 是登入帳號的真實姓名，設 Last Author 也會在存檔時被蓋掉。`tools/make-links-xlsx.ps1` 存檔後直接改 `core.xml`，並檢查整包不再出現該名稱。
+- （Phase 3b-4）移除 Excel 公式後要一併處理 `calcChain.xml`，否則 Excel 判定檔案損毀；只看 XML 是否合法抓不到，一定要用 `tools/office-open.ps1` 實際開檔。

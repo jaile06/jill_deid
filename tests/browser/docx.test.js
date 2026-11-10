@@ -1,12 +1,14 @@
 // Phase 3b-3: DOCX link targets and residue (spec §5.5 DOCX, H4–H7, H16; H15 in h15.test.js).
 import { describe, expect, it } from './runner.js';
 import { generateDocx, parseDocx } from '../../assets/js/upstream/formats/docx.js';
-import { BUILTIN_PATTERNS } from '../../assets/js/upstream/core/patterns.js';
+import { BUILTIN_PATTERNS, setPersonalHosts } from '../../assets/js/upstream/core/patterns.js';
 import { CodeBook } from '../../assets/js/upstream/core/codes.js';
-import { detect, resplitItems } from '../../assets/js/upstream/core/detector.js';
+import { resplitItems } from '../../assets/js/upstream/core/detector.js';
+import { detectShort } from '../../assets/js/jill/detect.js';
 import { applyRedactions } from '../../assets/js/upstream/core/redactor.js';
 import { scanUri } from '../../assets/js/jill/uri-scan.js';
-import { parseHyperlink, redactDocxLinks } from '../../assets/js/jill/links/docx.js';
+import { parseHyperlink } from '../../assets/js/jill/links/docx.js';
+import { redactLinks } from '../../assets/js/jill/links/rels.js';
 import { leaks } from './leak-check.js';
 
 const JSZip = globalThis.JSZip;
@@ -37,15 +39,15 @@ async function file({ body, rels = '', files = {} }) {
 
 /** parse → detect (部分保留) → decide links as the processing page does → generate; `tweak` edits the decisions */
 async function processDocx(spec, { tweak, hyperlinkMode = 'mask_pii_in_url' } = {}) {
-  const doc = await parseDocx(await file(spec));
+  const doc = await parseDocx(spec instanceof File ? spec : await file(spec));
   const book = new CodeBook();
   const scan = (s) => {
-    const items = detect(s, BUILTIN_PATTERNS, book);
+    const items = detectShort(s, BUILTIN_PATTERNS, book); // as the page does for link texts
     resplitItems(items, book, () => PREVIEW);
     return applyRedactions(s, items);
   };
   const decide = (uri) => scanUri(uri, BUILTIN_PATTERNS, book, { retentionOf: () => PREVIEW, hyperlinkMode });
-  const r = redactDocxLinks(doc.links, scan(doc.text), 'code', decide, scan);
+  const r = redactLinks(doc.links, scan(doc.text), 'code', decide, scan);
   tweak?.(r.links);
   const zip = await JSZip.loadAsync(await (await generateDocx(doc, r.edits, r.links)).arrayBuffer());
   const read = (path) => zip.file(path).async('string');
@@ -83,7 +85,7 @@ describe('DOCX links (spec §5.5 DOCX 1–4)', () => {
   it('H16 a field code split over 3 instrText runs: written to the first, others emptied, tooltip scanned', async () => {
     const pieces = [' HYPERLINK "mailto:wang', '.xm@school.', 'edu.tw" \\o "聯絡王小明" '];
     const { doc, xml, read, zip } = await processDocx({ body: p(field(pieces, '寫信給導師')) });
-    expect(doc.links.map((l) => [l.kind, l.uri, l.tooltip, doc.text.slice(...l.displayRange)])).toEqual([['field', 'mailto:wang.xm@school.edu.tw', '聯絡王小明', '寫信給導師']]);
+    expect(doc.links.map((l) => [l.kind, l.uri, l.texts[0]?.value, doc.text.slice(...l.displayRange)])).toEqual([['field', 'mailto:wang.xm@school.edu.tw', '聯絡王小明', '寫信給導師']]);
     const nodes = [...xml(await read('word/document.xml')).getElementsByTagNameNS(W, 'instrText')].map((n) => n.textContent);
     expect(nodes.slice(1)).toEqual(['', '']);
     matches(nodes[0], new RegExp(`^ HYPERLINK "mailto:%5B.+%5D@school\\.edu\\.tw" \\\\o "聯絡王\\[姓名:${C}\\]" $`));
@@ -170,5 +172,15 @@ describe('DOCX parts and residue (spec §5.5 DOCX 5–8)', () => {
     expect(await leaks(zip, ['林志明', '王小明', 'A123456789', '陳美玲'])).toEqual([]);
     expect(await read('word/comments.xml')).toContain('w:initials=""');
     expect(await read('word/document.xml')).toContain('新增');
+  });
+});
+
+describe('DOCX fixture made by Office, URLs rewritten (not stripped)', () => {
+  it('links.docx (tools/make-links-docx.ps1): nothing remains in any form', async () => {
+    setPersonalHosts(['facebook.com']);
+    const fixture = new File([await (await fetch('fixtures/links.docx')).blob()], 'links.docx');
+    const { zip, r } = await processDocx(fixture);
+    expect(r.links.every((l) => l.decision.action !== 'strip')).toBe(true);
+    expect(await leaks(zip, ['A123456789', '小明', 'wang.xm', 'wang.xiaoming', 'chen.ml', '林志明', '測試作者'])).toEqual([]);
   });
 });

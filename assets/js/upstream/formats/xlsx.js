@@ -2,6 +2,7 @@ import '../../../vendor/jszip.min.js';
 const JSZip = globalThis.JSZip;
                                                                               
 import { distributeEdits,              } from './segments.js';
+import { dropCalcChain, scrubXlsx, writeXlsxLinks, xlsxLinks } from '../../jill/links/xlsx.js'; // jill_deid patch (PATCHES.md P1-8)
 
 const MAIN_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const XML_NS = 'http://www.w3.org/XML/1998/namespace';
@@ -124,6 +125,10 @@ function cellText(c         , shared          )         {
   return is ? textOf(is) : '';
 }
 
+// jill_deid patch (PATCHES.md P1-8): legacy comments (<t> runs) and threaded comments (<text>)
+const isNotePath = (p) => /^xl\/comments\d*\.xml$/.test(p) || /^xl\/threadedComments\/[^/]+\.xml$/.test(p);
+const noteNodes = (doc) => Array.from(doc.getElementsByTagName('*')).filter((n) => (n.namespaceURI === MAIN_NS && n.localName === 't') || n.localName === 'text' && n.namespaceURI !== MAIN_NS);
+
 function rowOf(c         )         {
   return (c.getAttribute('r') ?? '').replace(/[A-Z]+/i, '');
 }
@@ -162,9 +167,32 @@ export async function parseXlsx(file      )                          {
     text += '\n';
   }
 
+  // jill_deid patch (PATCHES.md P1-8): comment text joins the scan (spec §5.5 XLSX 3), one segment per text node
+  const notes = [];
+  for (const path of Object.keys(zip.files).filter(isNotePath).sort()) {
+    const noteDoc = parseXml(await zip.file(path).async('string'), path);
+    notes.push({ path, doc: noteDoc });
+    for (const [nodeIdx, n] of noteNodes(noteDoc).entries()) {
+      const t = n.textContent ?? '';
+      if (!t) continue;
+      segments.push({ start: text.length, end: text.length + t.length, text: t });
+      cells.push({ note: notes.length - 1, nodeIdx });
+      text += `${t}\n`;
+    }
+  }
+  // links outside the text (spec §5.5 XLSX 1–2), with the original XML they live in
+  const ranges = new Map();
+  const sheetCells = sheets.map((s) => textCells(s.doc));
+  for (const [i, ref] of cells.entries()) {
+    if (ref.note !== undefined) continue;
+    const c = sheetCells[ref.sheetIdx][ref.cellIdx];
+    ranges.set(`${sheets[ref.sheetIdx].path}!${c.getAttribute('r')}`, [segments[i].start, segments[i].end]);
+  }
+  const pristine = new Map();
+  const links = await xlsxLinks(zip, sheets, pristine, (path, ref) => ranges.get(`${path}!${(ref ?? '').split(':')[0]}`));
   const sharedStringsXml = (await zip.file('xl/sharedStrings.xml')?.async('string')) ?? null;
-  const handle             = { zip, sheets, sharedStringsXml, segments, cells };
-  return { fileName: file.name, format: 'xlsx', text, handle, layout: { kind: 'xlsx', sheets: layoutSheets } };
+  const handle             = { zip, sheets, sharedStringsXml, segments, cells, notes, pristine };
+  return { fileName: file.name, format: 'xlsx', text, handle, layout: { kind: 'xlsx', sheets: layoutSheets }, links };
 }
 
 function setInlineString(c         , value        )       {
@@ -206,18 +234,27 @@ function scrubSharedStrings(xml        , referenced             )         {
  * and every other part of the workbook are untouched, except that shared-string entries no
  * longer referenced by any cell are blanked (see scrubSharedStrings).
  */
-export async function generateXlsx(doc                , edits            )                {
+// jill_deid patch (PATCHES.md P1-8): `links` are the decided link targets ([{ link, decision }], see
+// jill/links/xlsx.js); comment text is rewritten in place; comment authors and properties are always cleared.
+export async function generateXlsx(doc                , edits            , links = [])                {
   const handle = doc.handle              ;
   const changes = distributeEdits(handle.segments, edits);
 
   const perSheet = new Map                             ();
+  const perNote = new Map();
   for (const [segIdx, newText] of changes) {
     const ref = handle.cells[segIdx];
+    if (ref.note !== undefined) {
+      if (!perNote.has(ref.note)) perNote.set(ref.note, new Map());
+      perNote.get(ref.note).set(ref.nodeIdx, newText);
+      continue;
+    }
     if (!perSheet.has(ref.sheetIdx)) perSheet.set(ref.sheetIdx, new Map());
     perSheet.get(ref.sheetIdx) .set(ref.cellIdx, newText);
   }
 
-  const referenced = new Set        ();
+  for (const [path, xml] of handle.pristine ?? []) handle.zip.file(path, xml); // undo an earlier download
+  const clones = new Map();
   for (const [sheetIdx, sheet] of handle.sheets.entries()) {
     const clone = sheet.doc.cloneNode(true)            ;
     const cellChanges = perSheet.get(sheetIdx);
@@ -225,12 +262,28 @@ export async function generateXlsx(doc                , edits            )      
       const cells = textCells(clone);
       for (const [cellIdx, value] of cellChanges) setInlineString(cells[cellIdx], value);
     }
+    clones.set(sheet.path, clone);
+  }
+  for (const [i, note] of (handle.notes ?? []).entries()) {
+    const clone = note.doc.cloneNode(true);
+    const nodes = noteNodes(clone);
+    for (const [nodeIdx, value] of perNote.get(i) ?? []) {
+      nodes[nodeIdx].textContent = value;
+      if (nodes[nodeIdx].localName === 't') nodes[nodeIdx].setAttributeNS(XML_NS, 'xml:space', 'preserve');
+    }
+    handle.zip.file(note.path, serialize(clone));
+  }
+  if (writeXlsxLinks(handle.zip, clones, handle.pristine ?? new Map(), links)) await dropCalcChain(handle.zip);
+  await scrubXlsx(handle.zip);
+
+  const referenced = new Set        ();
+  for (const [path, clone] of clones) {
     for (const c of Array.from(clone.getElementsByTagNameNS(MAIN_NS, 'c'))) {
       if (c.getAttribute('t') !== 's') continue;
       const idx = Number(c.getElementsByTagNameNS(MAIN_NS, 'v')[0]?.textContent ?? '');
       if (Number.isInteger(idx)) referenced.add(idx);
     }
-    handle.zip.file(sheet.path, serialize(clone));
+    handle.zip.file(path, serialize(clone));
   }
   if (handle.sharedStringsXml !== null) {
     handle.zip.file('xl/sharedStrings.xml', scrubSharedStrings(handle.sharedStringsXml, referenced));
