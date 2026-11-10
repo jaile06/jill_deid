@@ -139,7 +139,7 @@ function serialize(doc          )         {
 /** Every call works on a fresh clone of the pristine parts so repeated downloads stay correct. */
 // jill_deid patch (PATCHES.md P1-7): `links` are the decided link targets ([{ link, decision }], see
 // jill/links/docx.js); residue (text-box fallback, tracked deletions, reviewer names, properties) is always removed.
-export async function generateDocx(doc                , edits            , links = [])                {
+export async function generateDocx(doc                , edits            , links = [], opts = {})                {
   const handle = doc.handle              ;
   const clones = new Map();
   for (const part of handle.parts) {
@@ -161,7 +161,7 @@ export async function generateDocx(doc                , edits            , links
   }
   for (const [path, xml] of handle.pristine ?? []) handle.zip.file(path, xml); // undo an earlier download
   writeDocxLinks(handle.zip, clones, handle.pristine ?? new Map(), links);
-  await scrubDocx(handle.zip, clones);
+  await scrubDocx(handle.zip, clones, opts);
   for (const [path, cloneDoc] of clones) handle.zip.file(path, serialize(cloneDoc));
   return handle.zip.generateAsync({ type: 'blob', mimeType: DOCX_MIME, compression: 'DEFLATE' });
 }

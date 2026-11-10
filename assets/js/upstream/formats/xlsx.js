@@ -236,7 +236,7 @@ function scrubSharedStrings(xml        , referenced             )         {
  */
 // jill_deid patch (PATCHES.md P1-8): `links` are the decided link targets ([{ link, decision }], see
 // jill/links/xlsx.js); comment text is rewritten in place; comment authors and properties are always cleared.
-export async function generateXlsx(doc                , edits            , links = [])                {
+export async function generateXlsx(doc                , edits            , links = [], opts = {})                {
   const handle = doc.handle              ;
   const changes = distributeEdits(handle.segments, edits);
 
@@ -274,7 +274,7 @@ export async function generateXlsx(doc                , edits            , links
     handle.zip.file(note.path, serialize(clone));
   }
   if (writeXlsxLinks(handle.zip, clones, handle.pristine ?? new Map(), links)) await dropCalcChain(handle.zip);
-  await scrubXlsx(handle.zip);
+  await scrubXlsx(handle.zip, opts);
 
   const referenced = new Set        ();
   for (const [path, clone] of clones) {

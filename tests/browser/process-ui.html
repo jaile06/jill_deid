@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>jill_deid processing page tests</title>
+<link rel="stylesheet" href="../../assets/css/upstream.css">
+<link rel="stylesheet" href="../../assets/css/jill_deid.css">
+<style>
+  body { font: 14px/1.5 monospace; margin: 16px; }
+  .fail { color: #b00020; }
+</style>
+<!-- settings as index.php prints them (spec §7): column labels for the roster -->
+<script type="application/json" id="jill-deid-config">{"version":1,"orgRules":[],"presets":[],"urlPersonalHosts":["facebook.com"],"columnLabels":{"座號":"座號","學號":"學號","姓名":"姓名"}}</script>
+</head>
+<body>
+<p id="summary">running…</p>
+<ul id="results"></ul>
+<div id="jill-deid-portal"></div>
+<script type="module">
+  import { run } from './runner.js';
+  import './process-ui.test.js';
+  run();
+</script>
+</body>
+</html>

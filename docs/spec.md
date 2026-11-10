@@ -561,6 +561,32 @@ require_once XOOPS_ROOT_PATH . '/footer.php';
 6. 介面明示已知不涵蓋範圍（§10）。
 7. 偵測項目標示來源：規則命中、欄首標籤（§6.5，顯示標籤名）、手動。欄首候選可依欄批次取消。
 
+**Phase 4a 實作與驗收（v3.8）**
+- 第 3 項的 `🔗` 只插在 Word、TXT、Markdown 的預覽中，位置在連結顯示文字之後。
+  - Excel 切換工作表、PDF 重繪頁面都由 `preview.js` 自行處理，會把按鈕洗掉，所以這兩種與沒有顯示文字的連結一律列在「文件連結」。
+  - `aria-label` 依 §4 i18n（v3.7：`ui/` 修補比照上游用中文）寫在修補中，不另設語言常數。
+- 「文件屬性」開關即 §5.5 DOCX 7 的「UI 可關」，預設勾選（清除）。
+
+上游功能逐項驗收對照：
+
+| 功能 | 驗證方式 |
+|---|---|
+| 1 選檔、多檔、加入檔案 | e2e、`process-ui.html` |
+| 拖放 | 手動 |
+| 2 貼上文字 | `presets.html` |
+| 3 範例卡 | `ui.test.js` |
+| 4 OCR | e2e |
+| OCR 的「取消辨識」 | 手動 |
+| 5 逐項取消、類別批次、重新偵測 | `process-ui.html` |
+| 移除檔案 | e2e |
+| 6 純文字檢視、圈選新增 | `process-ui.html` |
+| 7 輸出設定 | `presets.html`、`process-ui.html` |
+| 8 跨檔案共用編碼 | `process-ui.html` |
+| 9 下載文件、編碼表、打包 | `process-ui.html`、e2e |
+| 逾時確認 | `phase3a.test.js` |
+| 10 離開警示（`hasUnsavedResults`） | `process-ui.html` |
+| 11 格式限制 | `process-ui.html` |
+
 ### 6.2 後台 `admin/main.php`
 
 | op | 方法 | 方式 |

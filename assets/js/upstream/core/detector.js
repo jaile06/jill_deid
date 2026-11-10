@@ -106,9 +106,9 @@ export function scanPattern(text        , p         )              {
 /** Items (with codes from `book`) for resolved candidates. */
 export function toItems(text        , cands             , book          )                  {
   return cands.map((c) => {
-    if (!c.fixed) return makeItem(text, c.start, c.end, c.category, book, 'auto', c.retention);
-    const it = makeItem(text, c.start, c.end, c.category, book, 'auto'); // jill_deid patch (P1-5)
-    it.fixed = true;
+    const it = makeItem(text, c.start, c.end, c.category, book, 'auto', c.fixed ? undefined : c.retention);
+    if (c.fixed) it.fixed = true; // jill_deid patch (P1-5)
+    if (c.column) Object.assign(it, { column: c.column, label: c.label }); // jill_deid patch (P1-10): source 欄首
     return it;
   });
 }

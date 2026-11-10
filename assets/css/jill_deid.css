@@ -8,3 +8,10 @@
 :is(#jill-deid-app, #jill-deid-portal) .tooltip { opacity: 1; margin: 0; font-family: inherit; text-align: start; }
 /* Bootstrap: .mark { color: var(--bs-highlight-color); padding: .1875em } (upstream sets the padding) */
 :is(#jill-deid-app, #jill-deid-portal) .mark { color: inherit; }
+/* Module additions to the upstream interface (spec §6.1 新增 3, 7): the 🔗 after a link, its details, column batch. */
+:is(#jill-deid-app, #jill-deid-portal) .link-flag { border: 0; background: none; padding: 0 .15em; margin: 0; cursor: pointer; font: inherit; line-height: 1; }
+:is(#jill-deid-app, #jill-deid-portal) .link-flag:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
+:is(#jill-deid-app, #jill-deid-portal) .link-detail { display: grid; gap: .3rem; }
+:is(#jill-deid-app, #jill-deid-portal) .link-uri { overflow-wrap: anywhere; }
+:is(#jill-deid-app, #jill-deid-portal) .link-popup { max-width: min(36rem, calc(100vw - 16px)); }
+:is(#jill-deid-app, #jill-deid-portal) .column-batch { display: grid; gap: .25rem; margin-bottom: .5rem; }

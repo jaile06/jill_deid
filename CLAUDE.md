@@ -18,7 +18,8 @@
 | 3b-3 DOCX | 已合併 main（2026-11-10）：`jill/links/docx.js`（rels 每處引用、欄位碼、tooltip、H7 新 rId）、殘留清除（Fallback、修訂、作者、people.xml、docProps）、註腳／尾註／註解納入掃描；H15 零殘留；瀏覽器 79/79＋3/3、e2e 兩個佈景 PASS（`links.docx` 經 Word 開檔驗證） |
 | 3b-4 XLSX | 已合併 main（2026-11-10）：`jill/links/xlsx.js`（工作表超連結、內部連結、`HYPERLINK()` 公式、calcChain）、rels 引擎抽成 `links/rels.js` 與 DOCX 共用、註解與作者清除、`detectShort`；瀏覽器 89/89＋3/3、e2e 兩個佈景 PASS（`links.xlsx` 經 Excel 開檔驗證） |
 | 3b-5 PDF＋還原核心 | 已合併 main（2026-11-10）：PDF Link 讀取（`writable:false`，一律 strip＋警示）、`jill/links/restore.js`（`restoreDocument`）；H12 Markdown 逐位元組、Word／Excel 範例檔還原一致，H14 解碼後無 `/URI`；瀏覽器 94/94＋3/3、e2e 兩個佈景 PASS |
-| 4a 去識別化頁 | 下一步 |
+| 4a 去識別化頁 | 已合併 main（2026-11-10）：超連結處理、`🔗`＋文件連結清單（取消／移除／恢復）、H11 提示、文件屬性開關、項目來源與整欄取消；上游功能 1–11 對照驗收；瀏覽器 94/94＋3/3＋11/11、e2e 兩個佈景 PASS |
+| 4b 偵測規則頁 | 下一步 |
 
 ## 本模組特有的鐵則（spec 摘要，細節回 spec 查）
 
@@ -49,3 +50,5 @@
 - （Phase 3b-4）**站台設定會遮住另一條路徑**：預設情境是 `strip_link`，e2e 只走過「移除連結」；一次性的「改寫網址」檢查才發現 `display` 屬性裡編碼過的姓名外洩。兩種模式都要有測試：改寫模式由單元測試處理同一份 Office 範例檔。
 - （Phase 3b-4）**Excel 存檔的作者取自 Office 帳號**：`UserName` 只影響註解作者，`dc:creator`、`cp:lastModifiedBy` 是登入帳號的真實姓名，設 Last Author 也會在存檔時被蓋掉。`tools/make-links-xlsx.ps1` 存檔後直接改 `core.xml`，並檢查整包不再出現該名稱。
 - （Phase 3b-4）移除 Excel 公式後要一併處理 `calcChain.xml`，否則 Excel 判定檔案損毀；只看 XML 是否合法抓不到，一定要用 `tools/office-open.ps1` 實際開檔。
+- （Phase 4a）**介面測試要拿「實際下載的檔案」驗證**：攔截 `<a download>.click()` 取下載內容，確認畫面上的選擇（例如單一連結取消去識別化）真的反映在輸出檔，不只看畫面文字。
+- （Phase 4a）e2e 的「水平捲動」要先找是誰撐寬：school2022 的選單本身就超出 1280 寬，與本模組無關；檢查限定在 `#jill-deid-app` 內。

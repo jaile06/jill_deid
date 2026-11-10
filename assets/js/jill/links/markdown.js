@@ -48,7 +48,7 @@ export function outsideLinks(cands, links) {
 }
 
 /**
- * applyRedactions plus the link targets: `decide(uri)` is scanUri with the document's book and current settings.
+ * applyRedactions plus the link targets: `decide(uri, link)` is scanUri with the document's book and current settings.
  * A rewritten URL replaces its range; a stripped link keeps only its text (an inline link or image), or goes
  * entirely (a definition) or is emptied (an HTML attribute). Text edits inside removed parts are dropped.
  * The hits join the mapping table. Returns applyRedactions' fields and `links`: [{ link, decision }].
@@ -61,7 +61,7 @@ export function redactWithLinks(text, items, style, links, decide) {
     link,
     decision: inside(link, base.edits.map((e) => [e.start, e.end]))
       ? { action: 'strip', hits: [], warnings: ['manual'], unrestorable: true }
-      : decide(link.uri),
+      : decide(link.uri, link),
   }));
   const linkEdits = [];
   const removed = [];

@@ -6,9 +6,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-// presets.html is a page of its own: the process view keeps its documents in module state
+// presets.html and process-ui.html are pages of their own: the process view keeps its documents in module state
 const base = 'http://localhost/modules/jill_deid/tests/browser/';
-const urls = process.argv.length > 2 ? process.argv.slice(2) : ['index.html', 'presets.html'].map((p) => base + p);
+const urls = process.argv.length > 2 ? process.argv.slice(2) : ['index.html', 'presets.html', 'process-ui.html'].map((p) => base + p);
 const profile = mkdtempSync(join(tmpdir(), 'jill_deid_tests-'));
 const chrome = spawn('C:/Program Files/Google/Chrome/Application/chrome.exe', [
   '--headless=new', '--disable-gpu', '--no-first-run', '--remote-debugging-port=9335', `--user-data-dir=${profile}`, 'about:blank',

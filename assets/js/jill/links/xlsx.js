@@ -120,7 +120,7 @@ export function writeXlsxLinks(zip, clones, pristine, decided) {
 }
 
 /** Comment authors, people of threaded comments, document properties (spec §5.5 XLSX 3–4). */
-export async function scrubXlsx(zip) {
+export async function scrubXlsx(zip, { keepProps = false } = {}) {
   for (const path of Object.keys(zip.files).filter((p) => /^xl\/comments\d*\.xml$/.test(p))) {
     await editXml(zip, path, (doc) => {
       for (const a of doc.getElementsByTagNameNS(S, 'author')) a.textContent = '';
@@ -134,6 +134,6 @@ export async function scrubXlsx(zip) {
       }
     });
   }
-  await scrubProps(zip);
+  if (!keepProps) await scrubProps(zip);
 }
 

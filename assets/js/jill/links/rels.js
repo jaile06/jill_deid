@@ -166,17 +166,17 @@ export async function editXml(zip, path, fn) {
 
 const KEEP = { action: 'keep', hits: [], warnings: [], unrestorable: false };
 /**
- * The processing page's decision for each link: scanUri on its target (`decide`; links without one are kept) and
+ * The processing page's decision for each link: scanUri on its target (`decide(uri, link)`; links without one are kept) and
  * the normal scan of its texts (`plain`: text → { redactedText, mapping }), whose codes join the mapping table.
  */
 export function redactLinks(links, base, style, decide, plain) {
   const decided = links.map((link) => {
     if (link.writable === false) { // PDF: the rebuilt output has no links at all; only say which ones held personal data
-      const d = decide(link.uri);
+      const d = decide(link.uri, link);
       const pii = d.action !== 'keep' || d.warnings.length > 0;
       return { link, decision: { action: 'strip', hits: [], warnings: pii ? ['pdf', ...d.warnings] : [], unrestorable: true } };
     }
-    const decision = link.uri == null ? { ...KEEP } : { ...decide(link.uri) };
+    const decision = link.uri == null ? { ...KEEP } : { ...decide(link.uri, link) };
     if (link.texts?.length) {
       const scanned = link.texts.map((t) => plain(t.value));
       decision.texts = scanned.map((s) => s.redactedText);

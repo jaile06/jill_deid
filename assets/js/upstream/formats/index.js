@@ -44,15 +44,15 @@ export async function parseDocument(file      , opts                  = {})     
   }
 }
 
-export async function generateDocument(doc                , edits            , links = [])                {
+export async function generateDocument(doc                , edits            , links = [], opts = {})                {
   switch (doc.format) {
     case 'txt':
     case 'md':
       return generatePlainText(doc, edits);
     case 'docx':
-      return (await import('./docx.js')).generateDocx(doc, edits, links); // jill_deid patch (PATCHES.md P1-7): decided link targets
+      return (await import('./docx.js')).generateDocx(doc, edits, links, opts); // jill_deid patch (PATCHES.md P1-7): decided link targets
     case 'xlsx':
-      return (await import('./xlsx.js')).generateXlsx(doc, edits, links); // jill_deid patch (PATCHES.md P1-8)
+      return (await import('./xlsx.js')).generateXlsx(doc, edits, links, opts); // jill_deid patch (PATCHES.md P1-8)
     case 'pdf':
       return (await import('./pdf.js')).generatePdf(doc, edits);
   }
