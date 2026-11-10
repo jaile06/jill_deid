@@ -69,12 +69,18 @@ export function resolveOverlaps(cands             )              {
   return chosen;
 }
 
+// jill_deid patch (PATCHES.md P1-2): detect() split in two so a worker can run the patterns one at a time under a
+// watchdog (spec §3.3) and the main thread can add column candidates before codes are assigned (spec §6.5).
 export function detect(text        , patterns           , book           = new CodeBook())                  {
+  return toItems(text, resolveOverlaps(patterns.filter((p) => p.enabled).flatMap((p) => scanPattern(text, p))), book);
+}
+
+/** Candidates of one pattern, overlaps not yet resolved. */
+export function scanPattern(text        , p         )              {
   const cands              = [];
-  for (const p of patterns) {
-    if (!p.enabled) continue;
+  {
     const re = compilePattern(p);
-    if (!re) continue;
+    if (!re) return cands;
     let m                        ;
     while ((m = re.exec(text)) !== null) {
       if (m[0].length === 0) {
@@ -93,7 +99,12 @@ export function detect(text        , patterns           , book           = new C
       cands.push({ category: p.category, start: m.index, end: m.index + length, retention: p.retention });
     }
   }
-  return resolveOverlaps(cands).map((c) => makeItem(text, c.start, c.end, c.category, book, 'auto', c.retention));
+  return cands;
+}
+
+/** Items (with codes from `book`) for resolved candidates. */
+export function toItems(text        , cands             , book          )                  {
+  return cands.map((c) => makeItem(text, c.start, c.end, c.category, book, 'auto', c.retention));
 }
 
 export class OverlapError extends Error {

@@ -2,7 +2,16 @@
 import { BUILTIN_PATTERNS } from './patterns.js';
 import { sanitizeRetention } from './retention.js';
 
-export const STORAGE_KEY = 'deid.patternConfig.v1';
+// jill_deid patch (PATCHES.md P1-3): own key, and organisation rules (spec §7) between built-in and personal ones.
+export const STORAGE_KEY = 'jill_deid.patternConfig.v1';
+
+let orgPatterns            = [];
+
+/** Organisation rules from the module settings, as given by Config::toJson() (spec §7). */
+export function setOrgPatterns(rules       )       {
+  orgPatterns = rules.map((r) => ({ id: r.id, name: r.name, group: 'org', category: r.category, source: 'org', regex: r.regex,
+    example: r.example, enabled: true, applyToUrl: r.applyToUrl, locked: r.locked, retention: r.retention?.mode === 'none' ? undefined : r.retention }));
+}
 
 function defaultConfig()                {
   return { version: 1, disabledBuiltins: [], customPatterns: [] };
@@ -66,7 +75,9 @@ export function getEffectivePatterns(config                = loadConfig())      
   const retention = config.retention ?? {};
   const builtins = BUILTIN_PATTERNS.map((p) => ({ ...p, enabled: !disabled.has(p.id), retention: retention[p.id] }));
   const customs            = config.customPatterns.map((c) => ({ ...c, source: 'custom', retention: retention[c.id] }));
-  return [...builtins, ...customs];
+  // Users may switch an organisation rule off unless it is locked; their own retention wins over the organisation's.
+  const orgs = orgPatterns.map((p) => ({ ...p, enabled: p.locked || !disabled.has(p.id), retention: retention[p.id] ?? p.retention }));
+  return [...builtins, ...orgs, ...customs];
 }
 
 export function setBuiltinEnabled(config               , id        , enabled         )                {

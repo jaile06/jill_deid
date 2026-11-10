@@ -226,8 +226,8 @@ CREATE TABLE `jill_deid_preset` (
 
 **前台執行（MUST）**：整段偵測（內建＋機構＋個人規則）在**單一 module worker**（`assets/js/jill/regex.worker.js`，`new Worker(url, {type:'module'})`）執行，主執行緒不跑任何 regex。Worker 直接 import `core/patterns.js` 取得內建規則與 `validate`；主執行緒只送 `{text, builtinIds, extra:[{id,regex,category,retention}]}`，全文每份只送一次。流程：
 
-1. Worker 依序跑每條規則，開始前送 `{rule:id}`，全部跑完送 `{cands}`（已做 `resolveOverlaps`）。
-2. 主執行緒看門狗：同一條規則 2 秒沒有新訊息即 `terminate()`，記下該規則，重建 Worker 並跳過它重跑；UI 警示「規則 X 逾時已略過」。
+1. Worker 依序跑每條規則，開始前送 `{start:id}`，跑完送 `{done:id, cands}`（尚未解重疊，由主執行緒與欄首候選一起 `resolveOverlaps`）。
+2. 主執行緒看門狗：同一條規則 2 秒沒有 `done` 即 `terminate()`，記下該規則，重建 Worker 只跑尚未完成的規則；UI 警示「規則 X 逾時已略過」。**Worker 整頁共用一個**，只在看門狗終止時重建：每次新建都要重抓模組，`no-cache` 下斷網會失敗（Phase 3a e2e 實測）。無法啟動或重建時，剩下的規則一律記為略過（fail closed）。
 3. **逾時即 fail closed**：該檔有被略過的規則時，下載前要求使用者確認「部分規則未執行，結果可能遺漏個資」（沿用上游的確認方式）。
 4. 主執行緒以 `toItems(text, cands, book)` 產生項目並編碼（CodeBook 只在主執行緒）。§6.5 欄首候選與手動項目都在主執行緒併入，再做一次 `resolveOverlaps`。
 5. 呼叫端在上游 `ui/process-view.js` 的兩個 `detect()` 呼叫點（§A），改為 async（§4 修補）。
@@ -592,7 +592,7 @@ $xoTheme->addScript('modules/tadtools/sweet-alert/sweet-alert.js');
 **`assets/js/jill/columns.js`**（純函式，先寫測試）：`columnCandidates(doc, labels) → {category, start, end, label}[]`
 
 1. 標籤表：`Config.columnLabels`（`{標籤: 類別}`，來自模組設定 `column_labels`）。比對前去掉空白、全半形冒號、`*`、`＊`，英文不分大小寫，完全相同才算。
-2. **標題格**：文字符合標籤，且正下方那格（同欄、下一列）存在且**不是**標籤。最後一條排除直式表單（姓名／地址／電話上下排在同一欄）。
+2. **標題格**：文字符合標籤，且同欄往下第一個非空的格子存在且**不是**標籤。最後一條排除直式表單（姓名／地址／電話上下排在同一欄）。
 3. **候選**：同一工作表或表格、同一欄、列號大於標題格的每個非空格，直到該欄出現下一個標題格為止。範圍為該格文字去掉前後空白。
 4. 類別為標籤對應的類別；不是內建也不是機構類別時，於執行期加入 `CATEGORIES`（§4），且須通過 §3.3 第 4 點的格式。保留方式依 §3.4，機構類別取該規則的 `retention`。
 5. 與規則候選合併時（§3.3 第 4 步），**規則候選排在前面**：等長、同起點時保留規則的類別，例如「電話」欄裡的 `0912-345-678` 仍歸 `手機`。
@@ -668,16 +668,16 @@ EMAIL=電子郵件
 | 1a 骨架 | 以 `tad_xmod_maker` 產生（見下）、建 git repo、放入 `docs/spec.md` 與 `CLAUDE.md`，再依本文補齊 `strict_types`、語言常數 | 可安裝、移除、升級，E_ALL 0 警告，xoops-lint 0 error |
 | 1b 前端驗證 | §4 轉換（`core/`、`formats/`、`ui/`，vendor 改 side-effect import，佈景相容調整）與第三方檔案；§4 標 P0 的三項修補；`tests/browser/` 最小 runner、`patches.test.js`、`ui.test.js`；上游介面掛載於佈景內，確認五種格式與 OCR；以 H15 確認上游 DOCX 殘留 | H20、H21、H25 與 `ui.test.js` 通過；不通過就停下回報，不進下一個 Phase |
 | 2 後台 | Rule、Preset、Config（含 `columnLabels`）、admin 樣板、規則包、`tests/rule_validate_test.php` | §9.3 |
-| 3a 前端基礎 | 單一 module worker（§3.3，修補 `ui/process-view.js` 改 async）、`columns.js`（§6.5）、上游 `core`／`formats`／`ui` 測試移植 | 移植的上游測試、H22–H24 全過 |
+| 3a 前端基礎 | 單一 module worker（§3.3，修補 `ui/process-view.js` 改 async）、機構規則併入偵測、情境下拉與策略對照（§3.4、§6.1 新增 1，由 4a 提前）、`columns.js`（§6.5）、逾時下載確認 | H22–H24、Worker 與主執行緒結果一致、看門狗、`presets.html`、e2e 名冊 12 筆全過 |
 | 3b-1 URI 核心 | `uri-scan.js`、`url` 規則、還原 regex、合約文件 | H1–H3、H10、H13、H17–H19、H26 |
 | 3b-2 Markdown | `links/markdown.js` | H9 |
 | 3b-3 DOCX | rels、欄位碼、Fallback／del、docProps | H4–H7、H15、H16 |
 | 3b-4 XLSX | hyperlinks、公式 | H8 |
 | 3b-5 PDF＋還原核心 | annotation 偵測、URI 還原 | H12、H14 |
-| 4a 去識別化頁 | 修補上游 `ui/process-view.js`：§6.1「本模組新增」1–3、7 項（情境、超連結處理、`🔗`、項目來源）、欄首候選、逾時確認；上游功能 1–11 項逐項驗收 | H4、H11 的介面部分；§9.1 |
+| 4a 去識別化頁 | 修補上游 `ui/process-view.js`：§6.1「本模組新增」2、3、7 項（超連結處理、`🔗`、項目來源標示）；上游功能 1–11 項逐項驗收 | H4、H11 的介面部分；§9.1 |
 | 4b 偵測規則頁 | 修補上游 `ui/patterns-view.js`：機構規則分組、測試網址 | §9.3 前台攔截兩項 |
 | 4c 還原頁 | 修補上游 `ui/restore-view.js` 接上 URI 還原 | H12 經介面操作一次 |
-| 4d 整合 | 本模組範例（`hyperlinks.*`）、已知不涵蓋範圍說明、無障礙、語言檔補齊 | §9.4 |
+| 4d 整合 | 本模組範例（`hyperlinks.*`）、已知不涵蓋範圍說明、無障礙、語言檔補齊、上游 `core`／`formats`／`ui` 測試移植（由 3a 移來） | 移植的上游測試全過；§9.4 |
 | 5 驗收 | lint、斷網實測、Office 手動開檔 | §9 全勾 |
 
 **Phase 1a 的 maker 設定**（`modules/tad_xmod_maker/index.php?op=add_Form`）：目錄名 `jill_deid`；`min_xoops` 2.7.4；`min_php` **改成 8.3**（預設 8.2）；資料表依 §3。後台選單只建規則與情境頁，前台只留 `index.php`，不建區塊。**不使用 maker 的 CRUD 與表單程式碼**，`pattern` 用 `getText`、刪除走 POST 等要求依 §3、§6.2 手寫。maker 產出的前台 `index.php` 依 §6.1 改寫。

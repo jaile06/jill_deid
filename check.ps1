@@ -18,8 +18,8 @@ Get-ChildItem "$root\tests" -Filter *_test.php -ErrorAction SilentlyContinue | F
 }
 
 # Browser test page (spec §9.2) in headless Chrome, real time; needs the local site and Node >= 22
-$url = if ($env:JILL_DEID_TEST_URL) { $env:JILL_DEID_TEST_URL } else { 'http://localhost/modules/jill_deid/tests/browser/index.html' }
-& node "$root\tools\browser-tests.mjs" $url
+$urls = if ($env:JILL_DEID_TEST_URL) { @($env:JILL_DEID_TEST_URL) } else { @() }
+& node "$root\tools\browser-tests.mjs" @urls
 if ($LASTEXITCODE -ne 0) { $fail++ }
 
 if ($fail) { Write-Host "check.ps1: $fail check(s) failed" -ForegroundColor Red; exit 1 }

@@ -1,6 +1,7 @@
                                                                                                       
 import { CATEGORIES, MAX_FILE_BYTES } from '../core/types.js';
-import { addManualItem, detect, resplitItems, toggleItem } from '../core/detector.js';
+import { addManualItem, resplitItems, toggleItem } from '../core/detector.js';
+import { detectDocument } from '../../jill/detect.js'; // jill_deid patch (PATCHES.md P1-4): detection in a worker
 import { applyRedactions, blankOut, isPartial, mergeMappings, outputFor, previewLabel,                  } from '../core/redactor.js';
 import { CodeBook, parseMarkers } from '../core/codes.js';
 import { parseMapping, serializeMapping } from '../core/csv.js';
@@ -95,7 +96,34 @@ const state        = {
   marker: 'code',
   overrides: new Map(),
   patternKey: '',
+  presetId: null, // jill_deid: the preset in use, its per-category retention and hyperlink mode (spec §3.4, §5.4)
+  presetCustom: new Map(),
+  hyperlinkMode: 'mask_pii_in_url',
 };
+
+// jill_deid patch (PATCHES.md P1-4): presets from the module settings (spec §3.4, §6.1 新增 1). Choosing one sets the
+// output mode and marker and only re-splits the items; files are not parsed again.
+const STRATEGY_MODE = { partial: 'preview', hide_all: 'code', custom: 'custom' };
+let presets = [];
+
+export function setPresets(list) {
+  presets = list;
+  const preset = list.find((p) => p.isDefault);
+  if (preset) applyPreset(preset);
+}
+
+function applyPreset(p) {
+  state.presetId = p?.id ?? null;
+  state.presetCustom = new Map(Object.entries(p?.custom ?? {}));
+  state.overrides.clear();
+  if (!p) return;
+  state.outputMode = STRATEGY_MODE[p.keepStrategy] ?? 'preview';
+  state.marker = p.markerStyle;
+  state.hyperlinkMode = p.hyperlinkMode;
+}
+
+/** Categories of organisation rules: under 部分保留 they keep their rule's retention (spec §3.4). */
+const orgCategories = () => new Set(getEffectivePatterns().filter((p) => p.source === 'org').map((p) => p.category));
 
 /** Retention of the first enabled rule of a category (the 自訂 default before any override). */
 function ruleRetention(category          )                        {
@@ -103,15 +131,21 @@ function ruleRetention(category          )                        {
   return r && r.mode !== 'none' ? r : undefined;
 }
 
+/** The 自訂 default of a category: the preset's, then the rule's (spec §3.4). */
+const defaultRetention = (category) => state.presetCustom.get(category) ?? ruleRetention(category);
+
 /** What an item keeps under the current output mode; manual items follow their category like detected ones. */
-function effectiveRetention(it               )                        {
+function effectiveRetention(it               , org = orgCategories())                        {
   if (state.outputMode === 'code') return undefined;
-  if (state.outputMode === 'preview') return { mode: 'preview' };
-  return state.overrides.get(it.category) ?? it.retention;
+  // spec §3.4: standardSplit shows the first character of a category it does not know, so organisation
+  // categories keep their own rule's retention instead.
+  if (state.outputMode === 'preview') return org.has(it.category) ? it.retention : { mode: 'preview' };
+  return state.overrides.get(it.category) ?? state.presetCustom.get(it.category) ?? it.retention;
 }
 
 function applyOutputMode(d          )       {
-  resplitItems(d.items, d.book, effectiveRetention);
+  const org = orgCategories();
+  resplitItems(d.items, d.book, (it) => effectiveRetention(it, org));
 }
 
 function applyOutputModeToAll()       {
@@ -203,12 +237,12 @@ function patternKey()         {
  * (e.g. a rule added in「偵測規則」), re-detect every loaded document, keeping manual items,
  * codes and the user's cancellations for matches that are still found.
  */
-export function syncPatternChanges()       {
+export async function syncPatternChanges()       {
   const key = patternKey();
   if (key === state.patternKey) return;
   state.patternKey = key;
   if (state.docs.length === 0 || !viewRoot) return;
-  for (const d of state.docs) rescan(d, true);
+  for (const d of state.docs) await rescan(d, true); // jill_deid: detection is async (worker)
   const total = state.docs.reduce((n, d) => n + d.items.length, 0);
   toast(`偵測規則已變更，已重新偵測（共 ${total} 筆）`, 'success');
   render(viewRoot);
@@ -236,7 +270,11 @@ async function importFiles(files        , root             )                {
     try {
       const doc = await parseWithOcr(file);
       const book = bookForNewDoc();
-      const d           = { doc, items: detect(doc.text, getEffectivePatterns(), book), book, version: 0, docVer: -1, csvVer: -1 };
+      // jill_deid: worker detection plus column candidates; rules the watchdog skipped are warned about now and
+      // confirmed before download (spec §3.3 fail closed)
+      const { items, skipped } = await detectDocument(doc, getEffectivePatterns(), book);
+      const d           = { doc, items, skipped, book, version: 0, docVer: -1, csvVer: -1 };
+      if (skipped.length) toast(`${file.name}：規則「${skipped.join('、')}」執行逾時已略過，結果可能遺漏個資，請人工檢查`, 'error', 9000);
       applyOutputMode(d);
       applyDisabledCategories(d);
       state.docs.push(d);
@@ -273,10 +311,12 @@ async function parseWithOcr(file      )                          {
  * Re-runs detection on a document, keeping manual items. With `keep`, an automatic match
  * found again at the same place reuses its previous item (id, code, cancelled state).
  */
-function rescan(d          , keep         )                                   {
+async function rescan(d          , keep         )                                   {
   const manual = d.items.filter((it) => it.origin === 'manual');
   const old = new Map(d.items.filter((it) => it.origin === 'auto').map((it) => [`${it.start},${it.end},${it.category}`, it]));
-  const fresh = detect(d.doc.text, getEffectivePatterns(), d.book)
+  const detected = await detectDocument(d.doc, getEffectivePatterns(), d.book); // jill_deid: worker detection
+  d.skipped = detected.skipped;
+  const fresh = detected.items
     .filter((a) => !manual.some((m) => m.active && a.start < m.end && a.end > m.start))
     .map((a) => (keep && old.get(`${a.start},${a.end},${a.category}`)) || a);
   d.items = [...manual, ...fresh].sort((a, b) => a.start - b.start);
@@ -286,9 +326,12 @@ function rescan(d          , keep         )                                   {
   return { auto: fresh.length, manual: manual.length };
 }
 
-function redetect(root             )       {
-  const { auto, manual } = rescan(current(), false);
-  toast(`重新偵測完成：自動 ${auto} 筆、手動 ${manual} 筆`, 'success');
+async function redetect(root             )       {
+  await withBusy('重新偵測中…', async () => {
+    const { auto, manual } = await rescan(current(), false);
+    toast(`重新偵測完成：自動 ${auto} 筆、手動 ${manual} 筆`, 'success');
+    if (current().skipped.length) toast(`規則「${current().skipped.join('、')}」執行逾時已略過，結果可能遺漏個資，請人工檢查`, 'error', 9000);
+  });
   render(root);
 }
 
@@ -633,6 +676,7 @@ function renderOutputPanel(root             )              {
       action,
     ),
     el('div', { class: 'output-rows' },
+      presets.length ? renderPresetRow(root) : null, // jill_deid patch (P1-4): 情境 (spec §6.1 新增 1)
       el('div', { class: 'output-row', 'data-row': 'keep' },
         el('span', { class: 'output-row-label' }, '保留'),
         segmented('output-mode', OUTPUT_MODE_LABELS, state.outputMode, setMode),
@@ -660,10 +704,31 @@ function renderOutputPanel(root             )              {
   return box;
 }
 
+/** jill_deid patch (P1-4): the preset row; switching only re-splits the items (spec §6.1 新增 1). */
+function renderPresetRow(root             )              {
+  const select = el('select', { class: 'select', id: 'jill-deid-preset' },
+    el('option', { value: '' }, '不套用情境'),
+    ...presets.map((p) => el('option', { value: String(p.id) }, p.isDefault ? `${p.title}（預設）` : p.title)),
+  )                     ;
+  select.value = state.presetId === null ? '' : String(state.presetId);
+  select.addEventListener('change', () => {
+    applyPreset(presets.find((p) => String(p.id) === select.value));
+    applyOutputModeToAll();
+    render(root);
+  });
+  const note = presets.find((p) => p.id === state.presetId)?.description ?? '';
+  return el('div', { class: 'output-row', 'data-row': 'preset' },
+    el('label', { class: 'output-row-label', for: 'jill-deid-preset' }, '情境'),
+    select,
+    el('span', { class: 'output-row-note small muted' }, note),
+  );
+}
+
 function renderCategoryTable(root             )              {
   const present = CATEGORIES.filter((c) => state.docs.some((d) => d.items.some((it) => it.category === c)));
   if (present.length === 0) return el('p', { class: 'muted small' }, '目前沒有偵測項目。');
   const custom = state.outputMode === 'custom';
+  const org = orgCategories();
   const rows = present.map((category) => {
     const items = state.docs.flatMap((d) => d.items).filter((it) => it.category === category);
     const sample = items[0].original;
@@ -675,7 +740,10 @@ function renderCategoryTable(root             )              {
       render(root);
     });
     const override = state.overrides.get(category);
-    const applied                        = state.outputMode === 'code' ? undefined : state.outputMode === 'preview' ? { mode: 'preview' } : override ?? ruleRetention(category);
+    // jill_deid (P1-4, spec §3.4): organisation categories keep their rule's retention under 部分保留; 自訂 defaults to the preset's
+    const applied                        = state.outputMode === 'code' ? undefined
+      : state.outputMode === 'preview' ? (org.has(category) ? ruleRetention(category) : { mode: 'preview' })
+      : override ?? defaultRetention(category);
     const out = el('span', { class: exampleClass('small') });
     const msg = el('span', { class: 'small' });
     const show = (r                       ) => {
@@ -688,9 +756,9 @@ function renderCategoryTable(root             )              {
     if (!custom || off) {
       control = el('span', { class: 'muted small' }, off ? '不處理' : describeRetention(applied));
     } else {
-      const current            = override ?? ruleRetention(category) ?? { mode: 'none' };
+      const current            = override ?? defaultRetention(category) ?? { mode: 'none' };
       const mode = el('select', { class: 'select' },
-        el('option', { value: 'rule' }, `預設（${describeRetention(ruleRetention(category))}）`),
+        el('option', { value: 'rule' }, `預設（${describeRetention(defaultRetention(category))}）`),
         ...modesFor(category).map((m) => el('option', { value: m }, MODE_LABELS[m])),
       )                     ;
       mode.value = override ? override.mode : 'rule';
@@ -712,7 +780,7 @@ function renderCategoryTable(root             )              {
         const check = r ? checkRetention(sample, r, category) : { error: null, warnings: [] };
         msg.className = `small ${check.error ? 'field-error' : check.warnings.length ? 'notice notice-inline' : ''}`;
         msg.textContent = check.error ?? (check.warnings.length ? `⚠ ${check.warnings.join(' ')}` : '');
-        show(r ?? ruleRetention(category));
+        show(r ?? defaultRetention(category));
         return !check.error;
       };
       const apply = () => {
@@ -930,8 +998,15 @@ function saveCsv(d          )       {
   d.csvVer = d.version;
 }
 
+/** jill_deid patch (P1-4): fail closed (spec §3.3) — a rule skipped by the watchdog may have left personal data. */
+function confirmSkipped(docs)          {
+  const names = [...new Set(docs.flatMap((d) => d.skipped ?? []))];
+  return names.length === 0 || confirm(`規則「${names.join('、')}」執行逾時未完成，結果可能遺漏個資。仍要繼續嗎？`); // xoops-lint-ignore: local confirm, not a server-side delete (spec §6.1)
+}
+
 /** The main action: the document and its mapping table together, so the pair always matches. */
 async function downloadBoth(d          , root             )                {
+  if (!confirmSkipped([d])) return;
   try {
     toast('產生檔案中…', 'info', 2000);
     await saveDoc(d);
@@ -944,6 +1019,7 @@ async function downloadBoth(d          , root             )                {
 }
 
 async function downloadDoc(d          , root             )                {
+  if (!confirmSkipped([d])) return;
   try {
     toast('產生檔案中…', 'info', 2000);
     await saveDoc(d);
@@ -966,6 +1042,7 @@ function downloadMerged()       {
 }
 
 async function copyText(d          )                {
+  if (!confirmSkipped([d])) return;
   const { redactedText } = applyRedactions(d.doc.text, d.items, state.marker);
   try {
     await navigator.clipboard.writeText(redactedText);
@@ -977,6 +1054,7 @@ async function copyText(d          )                {
 
 /** Every document plus its mapping table in one archive (see formats/batch.ts). */
 async function downloadAll(root             )                {
+  if (!confirmSkipped(state.docs)) return;
   try {
     toast(`打包 ${state.docs.length} 個檔案中…`, 'info', 3000);
     const { blob } = await buildArchive(state.docs.map((d) => ({ doc: d.doc, items: d.items })), hasMergedTable() ? mergedMapping() : undefined, state.marker);
