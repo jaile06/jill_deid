@@ -294,14 +294,14 @@ function redetect(root             )       {
 
 function removeDoc(index        , root             )       {
   const d = state.docs[index];
-  if (d.items.some((it) => it.active) && !isDownloaded(d) && !confirm(`「${d.doc.fileName}」尚未下載去識別化結果${restorable() ? '與編碼表' : ''}，確定要移除嗎？`)) return;
+  if (d.items.some((it) => it.active) && !isDownloaded(d) && !confirm(`「${d.doc.fileName}」尚未下載去識別化結果${restorable() ? '與編碼表' : ''}，確定要移除嗎？`)) return; // xoops-lint-ignore: local confirm, not a server-side delete (spec §6.1)
   state.docs.splice(index, 1);
   state.active = Math.min(state.active, Math.max(0, state.docs.length - 1));
   render(root);
 }
 
 function resetAll(root             )       {
-  if (hasUnsavedResults() && !confirm('尚有檔案未下載去識別化結果與編碼表，確定要全部清除嗎？')) return;
+  if (hasUnsavedResults() && !confirm('尚有檔案未下載去識別化結果與編碼表，確定要全部清除嗎？')) return; // xoops-lint-ignore: local confirm, not a server-side delete (spec §6.1)
   state.docs = [];
   state.active = 0;
   state.sharedBook = null;

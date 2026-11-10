@@ -40,8 +40,12 @@ let relFixed = 0;
 // puts on <body> goes to #jill-deid-portal so the scoped stylesheet below still reaches it.
 const SCOPE = ':is(#jill-deid-app, #jill-deid-portal)';
 const shiftHeadings = (s) => s.replace(/(?<![\w-])h3(?![\w-])/g, 'h5').replace(/(?<![\w-])h2(?![\w-])/g, 'h4');
+// Upstream's confirm() calls guard in-browser actions (delete a personal rule, drop an undownloaded file), not
+// server-side deletes, so they stay; the marker keeps xoops-lint's NATIVE-DIALOG rule quiet on those lines.
 const adaptUi = (js) =>
-  shiftHeadings(js).replace(/\b(?:document|[\w.]+\.ownerDocument)\.body\.append\(/g, "(document.getElementById('jill-deid-portal') ?? document.body).append(");
+  shiftHeadings(js)
+    .replace(/\b(?:document|[\w.]+\.ownerDocument)\.body\.append\(/g, "(document.getElementById('jill-deid-portal') ?? document.body).append(")
+    .replace(/^(.*(?<![\w.$])confirm\s*\(.*)$/gm, '$1 // xoops-lint-ignore: local confirm, not a server-side delete (spec §6.1)');
 
 /** Splits a selector list at top-level commas (not inside :is(), :not() or [attr]). */
 const splitList = (s) => {

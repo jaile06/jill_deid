@@ -142,7 +142,7 @@ function renderRule(root             , config               , p         )       
       ? el('dd', { class: 'rule-actions' },
           button('編輯', () => render(root, custom), 'btn btn-small'),
           button('刪除', () => {
-            if (!confirm(`刪除自訂規則「${p.name}」？`)) return;
+            if (!confirm(`刪除自訂規則「${p.name}」？`)) return; // xoops-lint-ignore: local confirm, not a server-side delete (spec §6.1)
             saveConfig(removeCustom(config, p.id));
             render(root);
           }, 'btn btn-small btn-danger'),
