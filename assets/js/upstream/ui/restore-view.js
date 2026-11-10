@@ -1,7 +1,9 @@
                                                                   
 import { parseMarkers } from '../core/codes.js';
 import { parseMapping } from '../core/csv.js';
-import { restore,                    } from '../core/restorer.js';
+import { restoreDocument } from '../../jill/links/restore.js'; // jill_deid patch (PATCHES.md P1-13): links too (spec §5.3)
+import { URI_MARKER_REGEX } from '../../jill/uri-scan.js';
+import { textLinks } from '../../jill/links/markdown.js';
 import { ACCEPT_ATTR, generateDocument, outputFileName, parseDocument } from '../formats/index.js';
 import { button, clear, downloadBlob, dropZone, el, rejectOversized, toast, withBusy } from './components.js';
 import { renderDocumentPreview,                 } from './preview.js';
@@ -79,10 +81,15 @@ async function loadDocChecked(file      , root             )                {
 /** Output written with 類別 or 空白佔位 carries no codes, so there is nothing to restore. */
 const NO_MARKERS = '這份文件裡找不到編碼標記；若去識別化時標記方式選了「類別」或「空白佔位」，就無法還原。';
 
+// jill_deid patch (P1-13): a file whose only codes sit in link targets (%5B類別%3Acode%5D) can be restored too
+const linksOf = (doc) => (doc.format === 'docx' || doc.format === 'xlsx' ? doc.links ?? [] : textLinks(doc));
+const hasCodes = (doc) => parseMarkers(doc.text).length > 0
+  || linksOf(doc).some((l) => new RegExp(URI_MARKER_REGEX.source, 'i').test(l.uri ?? '') || (l.texts ?? []).some((t) => parseMarkers(t.value).length > 0));
+
 async function loadDoc(file      , root             )                {
   try {
     state.doc = await parseDocument(file);
-    if (!state.mapping && parseMarkers(state.doc.text).length === 0) toast(NO_MARKERS, 'error', 8000);
+    if (!state.mapping && !hasCodes(state.doc)) toast(NO_MARKERS, 'error', 8000);
     state.result = null;
     tryRestore();
     render(root);
@@ -109,7 +116,7 @@ async function loadCsv(file      , root             )                {
 
 function tryRestore()       {
   if (!state.doc || !state.mapping) return;
-  state.result = restore(state.doc.text, state.mapping);
+  state.result = restoreDocument(state.doc, state.mapping); // jill_deid patch (P1-13): text, link targets and link texts
   if (state.result.missingCodes.length) toast(`有 ${state.result.missingCodes.length} 個編碼在編碼表中找不到`, 'error', 7000);
   else if (state.result.restoredCount === 0) toast(NO_MARKERS, 'error', 8000);
   else toast(`已還原 ${state.result.restoredCount} 筆`, 'success');
@@ -128,6 +135,15 @@ function renderResult(root             )              {
     tip: `已由標記 ${doc.text.slice(e.start, e.end)} 還原`,
   }));
   renderDocumentPreview(preview, doc, decorations);
+  // jill_deid patch (P1-13): the links put back (target or ScreenTip, display text…); Markdown ones are in the preview
+  const decode = (u) => {
+    try {
+      return decodeURIComponent(u);
+    } catch {
+      return u;
+    }
+  };
+  const links = r.links.filter(({ link, decision }) => decision.action === 'rewrite' || (decision.texts ?? []).some((t, i) => t !== link.texts[i].value));
 
   return el(
     'div',
@@ -139,6 +155,15 @@ function renderResult(root             )              {
     r.missingCodes.length
       ? el('div', { class: 'notice notice-warn' }, '以下編碼在編碼表中找不到，已保留原標記：', el('div', { class: 'code-list' }, ...r.missingCodes.map((c) => el('code', {}, c))))
       : null,
+    links.length
+      ? el('details', { class: 'output-section restored-links', open: true },
+          el('summary', {}, `已還原的連結（${links.length} 個）`),
+          el('ul', { class: 'item-list' }, ...links.map(({ link, decision }) => el('li', { class: 'item small' },
+            el('div', { class: 'mono link-uri' }, decision.action === 'rewrite' ? decode(decision.uri) : decode(link.uri ?? '')),
+            ...(decision.texts ?? []).filter((t, i) => t !== link.texts[i].value).map((t) => el('div', { class: 'muted' }, `文字：${t}`)),
+          ))),
+        )
+      : null,
     el('h5', {}, '還原預覽'),
     preview,
   );
@@ -149,7 +174,7 @@ async function download(_root             )                {
   const r = state.result ;
   try {
     toast('產生檔案中…', 'info', 2000);
-    const blob = await generateDocument(doc, r.edits);
+    const blob = await generateDocument(doc, r.edits, r.links); // jill_deid patch (P1-13)
     downloadBlob(blob, outputFileName(doc.fileName.replace(/\.deid(?=\.[^.]+$)/, ''), 'restored'));
   } catch (e) {
     toast((e         ).message, 'error', 7000);
