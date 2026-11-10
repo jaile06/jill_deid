@@ -158,6 +158,28 @@ export function scanUri(uri, patterns, book, opts = {}) {
   return { action: 'rewrite', uri: applyEdits(uri, edits), hits, warnings, unrestorable: false };
 }
 
+/**
+ * What scanUri sees in `uri`, for the 測試網址 box (spec §6.1 新增 4): the personal-page hits, else each component
+ * with its raw and decoded value (null: undecodable) and the hits in it. Same rules and same code path as scanUri.
+ * @returns {{ page: { category: string, text: string }[], parts: { kind: string, raw: string, value: string|null, hits: { category: string, text: string }[] }[] }}
+ */
+export function explainUri(uri, patterns) {
+  const active = patterns.filter((p) => p.enabled !== false && p.applyToUrl !== false);
+  const page = resolveOverlaps(active.filter((p) => p.category === URL_CATEGORY).flatMap((p) => scanPattern(uri, p)))
+    .map((x) => ({ category: x.category, text: uri.slice(x.start, x.end) }));
+  if (page.length) return { page, parts: [] };
+  const others = active.filter((p) => p.category !== URL_CATEGORY);
+  return {
+    page,
+    parts: components(uri).map((c) => {
+      const { value, cands } = scanComponent(uri, c, others);
+      // raw shows a query value with its key (sid=112001); value and hits are the value's own
+      const raw = uri.slice(c.ctxStart, c.end).replace(/^[?&]/, '');
+      return { kind: c.kind, raw, value, hits: (cands ?? []).map((x) => ({ category: x.category, text: value.slice(x.start, x.end) })) };
+    }),
+  };
+}
+
 /** spec §5.3: `%5B類別%3Acode%5D` in a URI, category percent-encoded. */
 export const URI_MARKER_REGEX = /%5B((?:(?!%5B|%5D|%3A).){1,90}?)%3A([0-9a-f]{6})%5D/gi;
 
