@@ -8,7 +8,7 @@ define('_MI_JILLDEID_CREDITS', '移植自 data-deidentification（dean9703111，
 define('_MI_JILLDEID_AUTHOR_WEB', 'jill 開發筆記');
 define('_MI_JILLDEID_ADM_RULE', '機構規則');
 define('_MI_JILLDEID_ADM_PRESET', '處理情境');
-define('_MI_JILLDEID_TPL_APP', '前台獨立頁');
+define('_MI_JILLDEID_TPL_INDEX', '前台主頁');
 define('_MI_JILLDEID_TPL_ADMIN', '後台外框');
 define('_MI_JILLDEID_URL_PERSONAL_HOSTS', '個人頁網址清單');
 define('_MI_JILLDEID_URL_PERSONAL_HOSTS_DESC', '一行一筆，格式 domain[/pathPrefix]。命中清單的網址整條視為個資遮蔽；domain 以尾端比對（含 www.、m. 等子網域）。');

@@ -8,7 +8,7 @@ define('_MI_JILLDEID_CREDITS', 'Ported from data-deidentification (dean9703111, 
 define('_MI_JILLDEID_AUTHOR_WEB', 'jill dev notes');
 define('_MI_JILLDEID_ADM_RULE', 'Organization rules');
 define('_MI_JILLDEID_ADM_PRESET', 'Presets');
-define('_MI_JILLDEID_TPL_APP', 'Standalone front page');
+define('_MI_JILLDEID_TPL_INDEX', 'Front page');
 define('_MI_JILLDEID_TPL_ADMIN', 'Admin frame');
 define('_MI_JILLDEID_URL_PERSONAL_HOSTS', 'Personal page hosts');
 define('_MI_JILLDEID_URL_PERSONAL_HOSTS_DESC', 'One per line, format domain[/pathPrefix]. Matching URLs are masked as a whole; domain matches by suffix (www., m. and other subdomains included).');

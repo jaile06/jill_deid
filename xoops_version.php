@@ -42,7 +42,7 @@ $modversion['hasMain'] = 1;
 
 //---樣板設定---//
 $modversion['templates'] = [
-    ['file' => 'jill_deid_app.tpl', 'description' => _MI_JILLDEID_TPL_APP],
+    ['file' => 'jill_deid_index.tpl', 'description' => _MI_JILLDEID_TPL_INDEX],
     ['file' => 'jill_deid_admin.tpl', 'description' => _MI_JILLDEID_TPL_ADMIN],
 ];
 
