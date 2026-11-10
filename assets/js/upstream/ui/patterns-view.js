@@ -1,6 +1,8 @@
                                                                                            
 import { CATEGORIES } from '../core/types.js';
 import { getEffectivePatterns, loadConfig, newCustomId, removeCustom, saveConfig, setBuiltinEnabled, upsertCustom, validateRegex } from '../core/pattern-store.js';
+import { CodeBook } from '../core/codes.js';
+import { explainUri, scanUri } from '../../jill/uri-scan.js'; // jill_deid patch (PATCHES.md P1-12)
 import { describeRetention } from '../core/retention.js';
 import { compilePattern } from '../core/detector.js';
 import { button, clear, el, toast } from './components.js';
@@ -44,6 +46,7 @@ const ui = { formOpen: false, details: new Set        (), closedGroups: new Set 
 const GROUPS = [
   { id: 'tw', title: '台灣格式' },
   { id: 'intl', title: '國際與通用格式' },
+  { id: 'org', title: '機構共用規則' }, // jill_deid patch (PATCHES.md P1-12): from the module settings (spec §6.1 新增 4)
   { id: 'custom', title: '自訂規則' },
 ]         ;
 
@@ -66,16 +69,21 @@ function render(root             , editing                             = null)  
         render(root);
       }, 'btn btn-primary add-rule'),
     ),
-    el('p', { class: 'muted small' }, '內建規則可停用、不可修改；自訂規則可新增、編輯、刪除。點「查看規則」可看完整的比對規則（JavaScript RegExp，flags: gu）、檢核方式與預設保留方式。設定只存在你的瀏覽器。'),
+    el('p', { class: 'muted small' }, '內建規則可停用、不可修改；機構共用規則由管理者設定，未鎖定者可停用；自訂規則可新增、編輯、刪除。點「查看規則」可看完整的比對規則（JavaScript RegExp，flags: gu）、檢核方式與預設保留方式。設定只存在你的瀏覽器。'),
     ...(form ? [form] : []),
-    ...GROUPS.map((g) => renderGroup(root, config, g, patterns.filter((p) => (g.id === 'custom' ? p.source === 'custom' : p.group === g.id)))),
+    ...GROUPS
+      .map((g) => ({ g, list: patterns.filter((p) => (g.id === 'custom' ? p.source === 'custom' : p.group === g.id)) }))
+      .filter(({ g, list }) => g.id !== 'org' || list.length > 0) // jill_deid: no group when the site has none
+      .map(({ g, list }) => renderGroup(root, config, g, list)),
+    renderUrlTester(patterns), // jill_deid patch (P1-12): 測試網址 (spec §6.1 新增 4)
   );
   form?.querySelector                  ('input')?.focus();
 }
 
 /** Switches a rule on or off in the stored settings. */
 function setEnabled(config               , p         , enabled         )                {
-  if (p.source === 'builtin') return setBuiltinEnabled(config, p.id, enabled);
+  // jill_deid patch (P1-12): organisation rules switch like built-in ones (pattern-store P1-3 reads the same list)
+  if (p.source === 'builtin' || p.source === 'org') return setBuiltinEnabled(config, p.id, enabled);
   return upsertCustom(config, { ...config.customPatterns.find((c) => c.id === p.id) , enabled });
 }
 
@@ -89,7 +97,7 @@ function renderGroup(root             , config               , group            
   all.addEventListener('click', (e) => e.stopPropagation());
   all.addEventListener('change', () => {
     let next = config;
-    for (const p of patterns) next = setEnabled(next, p, all.checked);
+    for (const p of patterns) if (!p.locked) next = setEnabled(next, p, all.checked); // jill_deid: locked stays on
     saveConfig(next);
     toast(`${group.title}已全部${all.checked ? '啟用' : '停用'}`, 'success', 1500);
     render(root);
@@ -111,6 +119,10 @@ function renderGroup(root             , config               , group            
 function renderRule(root             , config               , p         )                {
   const toggle = el('input', { type: 'checkbox', class: 'rule-toggle', 'aria-label': `啟用 ${p.name}` })                    ;
   toggle.checked = p.enabled;
+  if (p.locked) { // jill_deid patch (P1-12): the administrator requires it
+    toggle.disabled = true;
+    toggle.title = '管理者設定為必須啟用';
+  }
   toggle.addEventListener('change', () => {
     saveConfig(setEnabled(config, p, toggle.checked));
     toast(`${p.name} 已${toggle.checked ? '啟用' : '停用'}`, 'success', 1500);
@@ -137,7 +149,9 @@ function renderRule(root             , config               , p         )       
     el('dt', {}, '比對規則'), el('dd', {}, el('code', { class: 'regex' }, p.regex)),
     p.note ? el('dt', {}, '檢核') : null, p.note ? el('dd', {}, p.note) : null,
     el('dt', {}, '預設保留'), el('dd', {}, el('span', { class: kept ? 'tag tag-kept' : '' }, describeRetention(p.retention)), el('span', { class: 'muted small' }, '（輸出設定選「自訂」時套用；要調整請到「去識別化」頁按「設為預設」）')),
-    el('dt', {}, '來源'), el('dd', {}, p.source === 'builtin' ? '內建' : '自訂'),
+    el('dt', {}, '來源'), el('dd', {}, p.source === 'builtin' ? '內建' : p.source === 'org' ? `機構共用（管理者設定，唯讀${p.locked ? '；必須啟用' : ''}）` : '自訂'),
+    p.source === 'org' ? el('dt', {}, '網址') : null, // jill_deid patch (P1-12)
+    p.source === 'org' ? el('dd', {}, p.applyToUrl === false ? '不檢查超連結網址' : '也檢查超連結網址（例如 ?sid= 參數）') : null,
     custom
       ? el('dd', { class: 'rule-actions' },
           button('編輯', () => render(root, custom), 'btn btn-small'),
@@ -249,3 +263,51 @@ function renderForm(root             , config               , editing           
   );
 }
 
+// ---------------------------------------------------------------------------------------
+// jill_deid patch (PATCHES.md P1-12): 測試網址 (spec §6.1 新增 4) — the parts of a URL after decoding and what each
+// rule finds there, exactly as a link target is scanned (jill/uri-scan.js).
+// ---------------------------------------------------------------------------------------
+const PART_LABELS = { userinfo: '帳號', host: '主機', path: '路徑', query: '參數', fragment: '錨點', mailto: '收件者', tel: '電話' };
+
+function renderUrlTester(patterns) {
+  const input = el('input', { type: 'url', class: 'input url-test-input', placeholder: 'https://school.edu.tw/q?sid=112001', 'aria-label': '要測試的網址' });
+  const out = el('div', { class: 'url-test-result', 'aria-live': 'polite' });
+  const run = () => {
+    clear(out);
+    const uri = input.value.trim();
+    if (!uri) return;
+    const { page, parts } = explainUri(uri, patterns);
+    const d = scanUri(uri, patterns, new CodeBook());
+    const decoded = (u) => {
+      try {
+        return decodeURIComponent(u);
+      } catch {
+        return u;
+      }
+    };
+    const outcome = d.action === 'rewrite' ? decoded(d.uri) : d.action === 'strip' ? '（移除連結）' : '（沒有命中，原樣保留）';
+    out.append(
+      page.length
+        ? el('p', { class: 'small' }, `整條命中「個人頁網址」：${page.map((h) => h.text).join('、')}`)
+        : el('div', { class: 'table-wrap' }, el('table', { class: 'table url-test-table' },
+            el('thead', {}, el('tr', {}, el('th', {}, '部分'), el('th', {}, '原始'), el('th', {}, '解碼後'), el('th', {}, '命中'))),
+            el('tbody', {}, ...parts.map((x) => el('tr', { class: x.hits.length ? 'url-test-hit' : '' },
+              el('td', {}, PART_LABELS[x.kind] ?? x.kind),
+              el('td', { class: 'mono' }, x.raw),
+              el('td', { class: 'mono' }, x.value ?? '（無法解碼，會整段隱藏）'),
+              el('td', {}, ...x.hits.flatMap((h) => [el('span', { class: `badge badge-${h.category}` }, h.category), ` ${h.text} `])),
+            ))),
+          )),
+      el('p', { class: 'small' }, el('span', { class: 'muted' }, '輸出（標記為編碼、保留方式依各規則）　'), el('span', { class: 'mono url-test-output' }, outcome)),
+    );
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') run();
+  });
+  return el('details', { class: 'rule-group url-test', open: true },
+    el('summary', { class: 'rule-group-head' }, el('span', { class: 'rule-group-title' }, '測試網址')),
+    el('p', { class: 'muted small' }, '貼上一個連結網址，看它被拆成哪些部分、解碼後的內容，以及目前啟用的規則在哪裡命中。只在瀏覽器內處理。'),
+    el('div', { class: 'add-popup-row' }, input, button('測試', run, 'btn btn-small')),
+    out,
+  );
+}
