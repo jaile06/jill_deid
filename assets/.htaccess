@@ -1,0 +1,13 @@
+# No bundler means no hashed file names, and ?v= cannot reach sub-modules: make the browser
+# revalidate (ETag) every time so an upgrade never mixes old and new modules (spec §4).
+<IfModule mod_headers.c>
+    <If "%{REQUEST_URI} =~ m#/assets/(js|vendor|css)/#">
+        Header set Cache-Control "no-cache"
+    </If>
+</IfModule>
+
+# Serve the gzip language models as-is; tesseract.js gunzips them itself.
+<IfModule mod_mime.c>
+    RemoveEncoding .gz
+    AddType application/octet-stream .gz
+</IfModule>
