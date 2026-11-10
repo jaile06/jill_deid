@@ -9,6 +9,9 @@ $GLOBALS['xoopsLogger']->activated = false;    // 避免除錯輸出注入行內
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'self'");
 header('Referrer-Policy: no-referrer');
 
+// XoopsTpl 原本由 XOOPS_ROOT_PATH/header.php 載入，獨立頁不走該檔，須自行引入
+require_once XOOPS_ROOT_PATH . '/class/template.php';
+
 // ponytail: Phase 1a 只有外框；Config::toJson()（§7）於 Phase 2 加入
 $tpl = new \XoopsTpl();
 $tpl->display('db:jill_deid_app.tpl');
