@@ -1,40 +1,11 @@
 // Phase 3b-5: restore core (spec §5.3, H12) and PDF links (spec §5.5 PDF, H14).
 import { describe, expect, it } from './runner.js';
-import { BUILTIN_PATTERNS, setPersonalHosts } from '../../assets/js/upstream/core/patterns.js';
-import { CodeBook } from '../../assets/js/upstream/core/codes.js';
-import { resplitItems } from '../../assets/js/upstream/core/detector.js';
-import { applyRedactions } from '../../assets/js/upstream/core/redactor.js';
-import { parseMapping, serializeMapping } from '../../assets/js/upstream/core/csv.js';
+import { parseMapping } from '../../assets/js/upstream/core/csv.js';
+import { setPersonalHosts } from '../../assets/js/upstream/core/patterns.js';
 import { generateDocument, parseDocument } from '../../assets/js/upstream/formats/index.js';
-import { detectDocument, detectShort } from '../../assets/js/jill/detect.js';
-import { scanUri } from '../../assets/js/jill/uri-scan.js';
-import { redactWithLinks, textLinks } from '../../assets/js/jill/links/markdown.js';
-import { redactLinks } from '../../assets/js/jill/links/rels.js';
 import { restoreDocument } from '../../assets/js/jill/links/restore.js';
 import { PDFDocument, PDFName, PDFRawStream, PDFString, StandardFonts, decodePDFRawStream } from '../../assets/vendor/pdf-lib.esm.min.js';
-
-const PREVIEW = { mode: 'preview' };
-const sid = { id: 'org-1', category: '學號', regex: '(?<=[?&]sid=)[^&#\\s]+', enabled: true, applyToUrl: true, source: 'org' };
-const PATTERNS = [...BUILTIN_PATTERNS, sid];
-
-/** De-identify as the processing page does (部分保留, code, mask_pii_in_url) and return the output file + CSV text. */
-async function deidentify(file) {
-  const doc = await parseDocument(file);
-  const book = new CodeBook();
-  const { items } = await detectDocument(doc, PATTERNS, book);
-  resplitItems(items, book, () => PREVIEW);
-  const decide = (uri) => scanUri(uri, PATTERNS, book, { retentionOf: () => PREVIEW });
-  const scan = (s) => {
-    const it = detectShort(s, PATTERNS, book);
-    resplitItems(it, book, () => PREVIEW);
-    return applyRedactions(s, it);
-  };
-  const r = ['docx', 'xlsx', 'pdf'].includes(doc.format)
-    ? redactLinks(doc.links ?? [], applyRedactions(doc.text, items), 'code', decide, scan)
-    : redactWithLinks(doc.text, items, 'code', textLinks(doc), decide);
-  const out = new File([await generateDocument(doc, r.edits, r.links)], file.name.replace(/(\.[^.]+)$/, '.deid$1'));
-  return { doc, r, out, csv: serializeMapping(r.mapping) };
-}
+import { deidentify } from './helpers.js';
 
 /** Restore the output with the CSV (read back as a user would) and parse the restored file again. */
 async function restoreFile(out, csv) {

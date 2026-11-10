@@ -20,7 +20,8 @@
 | 3b-5 PDF＋還原核心 | 已合併 main（2026-11-10）：PDF Link 讀取（`writable:false`，一律 strip＋警示）、`jill/links/restore.js`（`restoreDocument`）；H12 Markdown 逐位元組、Word／Excel 範例檔還原一致，H14 解碼後無 `/URI`；瀏覽器 94/94＋3/3、e2e 兩個佈景 PASS |
 | 4a 去識別化頁 | 已合併 main（2026-11-10）：超連結處理、`🔗`＋文件連結清單（取消／移除／恢復）、H11 提示、文件屬性開關、項目來源與整欄取消；上游功能 1–11 對照驗收；瀏覽器 94/94＋3/3＋11/11、e2e 兩個佈景 PASS |
 | 4b 偵測規則頁 | 已合併 main（2026-11-10）：機構共用規則分組（locked 不可停用）、「測試網址」框（`explainUri`）；另合併 `fix-preview-notes`（註腳、章節附註、註解分框標示）；瀏覽器 95＋3＋11＋9 全過、e2e 兩個佈景 PASS |
-| 4c 還原頁 | 下一步 |
+| 4c 還原頁 | 已合併 main（2026-11-10）：還原頁接上 `restoreDocument`，列出已還原的連結；H12 經介面（Word 範例檔下載後與原檔一致、Markdown 逐位元組）；瀏覽器 95＋3＋11＋9＋3 全過、e2e 兩個佈景 PASS |
+| 4d 整合 | 下一步 |
 
 ## 本模組特有的鐵則（spec 摘要，細節回 spec 查）
 

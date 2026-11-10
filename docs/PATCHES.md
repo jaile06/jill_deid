@@ -20,6 +20,7 @@
 | P1-10 | `ui/process-view.js`、`core/detector.js`、`formats/index.js`、`formats/batch.js`、`formats/docx.js`、`formats/xlsx.js` | 輸出設定新增「超連結」（`mask_pii_in_url`／`strip_link`）與「文件屬性」（清除作者等，預設勾選）；預覽中含個資連結後插入 `🔗`（Word、TXT、Markdown；以 `jill/preview-insert.js` 插在顯示文字之後），Excel、PDF 與沒有顯示文字的連結列在「文件連結」；彈出層與清單對照原連結與輸出、顯示警示，可「取消去識別化」「移除連結」「恢復自動處理」（`d.linkChoices`，`redact()` 的 `decide(uri, link)` 先看使用者選擇）；標記非「編碼」時提示連結會移除（H11）；偵測清單每項標示來源（規則／欄首「標籤」／手動），欄首項目可整欄取消或加回；`toItems` 帶上欄首候選的 `column`、`label`；`generateDocument(doc, edits, links, opts)` 的 `opts.keepProps` 傳到 `scrubDocx`、`scrubXlsx` | spec §5.4、§5.5 DOCX 7、§6.1 新增 2、3、7 | `process-ui.html`、e2e |
 | P1-11 | `formats/docx.js`、`ui/preview.js` | 段落的 `part` 增加 `footnote`、`endnote`、`comment`；預覽以框線分開並標「註腳」「章節附註」「註解」，略過其中的空段落（Word 的註腳分隔線） | 3b-3 起註腳與註解納入掃描後，預覽把它們混在本文中（使用者 2026-11-10 要求標示） | `docx.test.js` |
 | P1-12 | `ui/patterns-view.js` | 「機構共用規則」分組（沒有就不顯示）：開關與內建規則共用 `setBuiltinEnabled`，locked 者開關停用、「全部啟用」略過；詳細資料顯示來源、是否必須啟用、是否檢查網址；「測試網址」框以 `jill/uri-scan.js` 的 `explainUri`／`scanUri` 列出各部分的原始值、解碼值、命中與輸出 | spec §6.1 新增 4、§9.3 第 4 項 | `patterns-ui.html` |
+| P1-13 | `ui/restore-view.js` | 還原改用 `jill/links/restore.js` 的 `restoreDocument`（內文＋連結目標＋連結文字），下載時把 `links` 交給 `generateDocument`；結果列出「已還原的連結」；「找不到編碼標記」的提示也看連結內的編碼 | 3b-5 的還原核心接上還原頁（spec §5.3、H12 經介面） | `restore-ui.html` |
 | P1-1 | `formats/pdf.js` | `GlobalWorkerOptions.workerPort` 整頁共用一個 module worker，取代 `workerSrc` | 每份文件重抓 worker，`no-cache` 下斷網處理第二份 PDF 失敗（spec §4、§9.1） | `tools/e2e.mjs` 斷網項目 |
 
 ## 待辦
