@@ -1,11 +1,2 @@
-<{$toolbar|default:''}>
-<{if $now_op|default:false}>
-    <{include file="$xoops_rootpath/modules/$xoops_dirname/templates/op_`$now_op`.tpl"}>
-<{/if}>
-
-<script>
-    $(document).ready(function(){
-        $('[data-toggle="tooltip"]').tooltip();
-        $('[data-bs-toggle="tooltip"]').tooltip();
-    });
-</script>
+<h3><{$smarty.const._MD_JILLDEID_APP_TITLE|escape}></h3>
+<div id="jill-deid-app"></div>

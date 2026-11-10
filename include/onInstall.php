@@ -1,18 +1,9 @@
 <?php
-use XoopsModules\Tadtools\Utility;
-if (!class_exists('XoopsModules\Tadtools\Utility')) {
-    require XOOPS_ROOT_PATH . '/modules/tadtools/preloads/autoloader.php';
-}
 
+declare(strict_types=1);
 
-
-function xoops_module_install_jill_deid(&$module)
+// 本模組不寫 uploads/（規格 §0），安裝時無需建目錄
+function xoops_module_install_jill_deid(\XoopsModule $module): bool
 {
-
-    Utility::mk_dir(XOOPS_ROOT_PATH . "/uploads/jill_deid");
-    Utility::mk_dir(XOOPS_ROOT_PATH . "/uploads/jill_deid/file");
-    Utility::mk_dir(XOOPS_ROOT_PATH . "/uploads/jill_deid/image");
-    Utility::mk_dir(XOOPS_ROOT_PATH . "/uploads/jill_deid/image/.thumbs");
-
     return true;
 }
