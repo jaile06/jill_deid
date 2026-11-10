@@ -46,6 +46,8 @@
 
 依編碼查表：類別 `網址` 原樣寫回（否則 `/` 會變成 `%2F`），其他類別寫回 `encodeURIComponent(original)`。查無編碼就保留標記，列入 `missingCodes`。
 
+**整份文件**：`jill/links/restore.js` 的 `restoreDocument(doc, mapping)` 一次處理內文、文字中的連結網址、DOCX／XLSX 的連結目標與屬性文字（H12：Markdown 逐位元組相同；Word、Excel 範例檔的內文、目標、屬性文字還原後與原檔相同）。
+
 **一致性**：還原後的 URI 與原 URI 經 `decodeURIComponent` 正規化後相同；只有被隱藏的區段，編碼大小寫、`+` 與 `%20` 可能不同。`網址` 與解碼失敗的值逐位元組相同（H13）。
 
 ## 4. 文字層裸網址（spec §5.3 例外）

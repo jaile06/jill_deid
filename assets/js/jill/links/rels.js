@@ -171,6 +171,11 @@ const KEEP = { action: 'keep', hits: [], warnings: [], unrestorable: false };
  */
 export function redactLinks(links, base, style, decide, plain) {
   const decided = links.map((link) => {
+    if (link.writable === false) { // PDF: the rebuilt output has no links at all; only say which ones held personal data
+      const d = decide(link.uri);
+      const pii = d.action !== 'keep' || d.warnings.length > 0;
+      return { link, decision: { action: 'strip', hits: [], warnings: pii ? ['pdf', ...d.warnings] : [], unrestorable: true } };
+    }
     const decision = link.uri == null ? { ...KEEP } : { ...decide(link.uri) };
     if (link.texts?.length) {
       const scanned = link.texts.map((t) => plain(t.value));

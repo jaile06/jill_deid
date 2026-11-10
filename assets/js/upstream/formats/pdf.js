@@ -77,12 +77,22 @@ export async function parsePdf(file      , opts                  = {})          
   try {
     const pdf = await task.promise;
     const pages            = [];
-    for (let p = 1; p <= pdf.numPages; p++) pages.push(await textLayer(await pdf.getPage(p)));
-    if (hasText(pages)) return assemblePdf(file.name, pages);
+    // jill_deid patch (PATCHES.md P1-9): Link annotations (spec §5.5 PDF). The rebuilt output never carries them,
+    // so they are listed only to warn (writable: false); unsafeUrl is the target as written, url pdf.js's cleaned one.
+    const links = [];
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      pages.push(await textLayer(page));
+      for (const a of await page.getAnnotations()) {
+        const uri = a.subtype === 'Link' ? (a.unsafeUrl ?? a.url) : undefined;
+        if (uri) links.push({ id: `pdf:${p}#${links.length}`, kind: 'pdf', uri, part: `pdf:${p}`, page: p, rect: a.rect, writable: false });
+      }
+    }
+    if (hasText(pages)) return { ...assemblePdf(file.name, pages), links };
     if (!opts.ocr) throw new Error('此 PDF 沒有可擷取的文字層（可能是掃描影像）；還原請使用本工具輸出的去識別化檔案');
     const scanned = await (await import('./ocr.js')).recognizePdf(pdf, opts.ocr);
     if (!hasText(scanned)) throw new Error('未在此 PDF 的頁面影像中辨識到任何文字');
-    return assemblePdf(file.name, scanned, true);
+    return { ...assemblePdf(file.name, scanned, true), links };
   } finally {
     await task.destroy();
   }
