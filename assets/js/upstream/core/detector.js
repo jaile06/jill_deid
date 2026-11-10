@@ -47,14 +47,26 @@ export function compilePattern(p         )                {
   }
 }
 
-/** Longest match wins; on equal length, the earlier start wins. */
-function resolveOverlaps(cands             )              {
+/**
+ * Longest match wins; on equal length, the earlier start wins (ties keep input order).
+ * jill_deid patch (PATCHES.md P0-3): chosen spans stay sorted by start and never overlap, so a
+ * candidate only has to clear its two neighbours. Upstream scanned every chosen span (O(n²)).
+ */
+export function resolveOverlaps(cands             )              {
   const sorted = [...cands].sort((a, b) => b.end - b.start - (a.end - a.start) || a.start - b.start);
   const chosen              = [];
   for (const c of sorted) {
-    if (chosen.every((k) => c.end <= k.start || c.start >= k.end)) chosen.push(c);
+    let lo = 0;
+    let hi = chosen.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (chosen[mid].start < c.start) lo = mid + 1;
+      else hi = mid;
+    }
+    // ponytail: splice shifts the array (memmove); 80k spans take ~10 ms. A tree only pays off far beyond that.
+    if ((lo === 0 || chosen[lo - 1].end <= c.start) && (lo === chosen.length || c.end <= chosen[lo].start)) chosen.splice(lo, 0, c);
   }
-  return chosen.sort((a, b) => a.start - b.start);
+  return chosen;
 }
 
 export function detect(text        , patterns           , book           = new CodeBook())                  {

@@ -2,6 +2,7 @@
 import { describe, expect, it } from './runner.js';
 import { generateDocx, parseDocx } from '../../assets/js/upstream/formats/docx.js';
 import { generateXlsx, parseXlsx } from '../../assets/js/upstream/formats/xlsx.js';
+import { generateDocument, parseDocument } from '../../assets/js/upstream/formats/index.js';
 import * as detector from '../../assets/js/upstream/core/detector.js';
 import { BUILTIN_PATTERNS } from '../../assets/js/upstream/core/patterns.js';
 import { applyRedactions } from '../../assets/js/upstream/core/redactor.js';
@@ -74,6 +75,20 @@ describe('H21 xlsx numeric cells', () => {
     expect(xml).toContain('<c r="D2" s="1"><v>42</v></c>');
     expect(xml).toContain('<c r="B2" t="n"><v>3</v></c>');
   });
+});
+
+describe('samples round-trip with the patches', () => {
+  for (const name of ['contract.docx', 'quotation.docx', 'customers.xlsx', 'meeting-notes.md', 'support-email.txt']) {
+    it(name, async () => {
+      const blob = await (await fetch(`../../assets/samples/${name}`)).blob();
+      const doc = await parseDocument(new File([blob], name));
+      const items = detector.detect(doc.text, BUILTIN_PATTERNS);
+      const { redactedText, edits } = applyRedactions(doc.text, items);
+      const out = await parseDocument(new File([await generateDocument(doc, edits)], name));
+      expect(items.length > 0).toBe(true);
+      expect(out.text).toBe(redactedText);
+    });
+  }
 });
 
 describe('H25 resolveOverlaps', () => {

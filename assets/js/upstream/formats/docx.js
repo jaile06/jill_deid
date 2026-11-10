@@ -93,7 +93,7 @@ function extractPart(path        , doc          , offset        )               
   };
 
   visit(doc.documentElement);
-  return { part: { path, doc, nodes, segments, paragraphs }, text };
+  return { part: { path, doc, nodes, segments, paragraphs, offset }, text };
 }
 
 function partOrder(paths          )           {
@@ -138,7 +138,9 @@ export async function generateDocx(doc                , edits            )      
     const partEdits = edits.filter((e) => e.start < partEnd && e.end > partStart);
 
     const cloneDoc = part.doc.cloneNode(true)            ;
-    const { part: clone } = extractPart(part.path, cloneDoc, partStart);
+    // jill_deid patch (PATCHES.md P0-1): re-extract at the part's own offset. Upstream used the first
+    // <w:t>'s start, which is off by any empty paragraph, tab or break before it.
+    const { part: clone } = extractPart(part.path, cloneDoc, part.offset);
     const changes = distributeEdits(clone.segments, partEdits);
     for (const [i, newText] of changes) {
       const node = clone.nodes[i];

@@ -96,11 +96,20 @@ async function sheetPaths(zip       )                                           
     .map((path) => ({ path, name: path.replace(/^.*\//, '').replace(/\.xml$/, '') }));
 }
 
-/** Text-bearing cells in document order: shared-string and inline-string cells. */
+/**
+ * Text-bearing cells in document order: shared-string and inline-string cells, and (jill_deid patch,
+ * PATCHES.md P0-2) plain numeric cells, where rosters keep 學號 and 座號. Formula results stay out:
+ * rewriting one would drop its <f>.
+ */
+const isNumeric = (c         ) => {
+  const t = c.getAttribute('t');
+  return (t === null || t === 'n') && c.getElementsByTagNameNS(MAIN_NS, 'f').length === 0;
+};
+
 function textCells(doc          )            {
   return Array.from(doc.getElementsByTagNameNS(MAIN_NS, 'c')).filter((c) => {
     const t = c.getAttribute('t');
-    return t === 's' || t === 'inlineStr';
+    return t === 's' || t === 'inlineStr' || isNumeric(c);
   });
 }
 
@@ -110,6 +119,7 @@ function cellText(c         , shared          )         {
     const idx = Number(v?.textContent ?? '');
     return Number.isInteger(idx) ? (shared[idx] ?? '') : '';
   }
+  if (isNumeric(c)) return c.getElementsByTagNameNS(MAIN_NS, 'v')[0]?.textContent ?? '';
   const is = c.getElementsByTagNameNS(MAIN_NS, 'is')[0];
   return is ? textOf(is) : '';
 }
