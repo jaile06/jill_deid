@@ -28,7 +28,8 @@ function cellsOf(doc) {
  * @param {{ text: string, layout?: object }} doc
  * @param {Record<string, string>} labels   label → category (Config.columnLabels)
  * @param {(category: string) => object | undefined} retentionOf
- * @returns {{ category: string, start: number, end: number, retention?: object, label: string }[]}
+ * @returns {{ category: string, start: number, end: number, retention?: object, label: string, column: string }[]}
+ *   column: one key per column of one table or sheet, so the page can cancel a whole column
  */
 export function columnCandidates(doc, labels, retentionOf = () => undefined) {
   const lookup = new Map(Object.entries(labels ?? {}).map(([label, category]) => [norm(label), category]));
@@ -41,7 +42,7 @@ export function columnCandidates(doc, labels, retentionOf = () => undefined) {
     columns.get(key).push(c);
   }
   const out = [];
-  for (const cells of columns.values()) {
+  for (const [column, cells] of columns) {
     cells.sort((a, b) => a.row - b.row);
     let category = null;
     let label = '';
@@ -59,7 +60,7 @@ export function columnCandidates(doc, labels, retentionOf = () => undefined) {
       let end = c.end;
       while (start < end && /\s/.test(doc.text[start])) start++;
       while (end > start && /\s/.test(doc.text[end - 1])) end--;
-      if (end > start) out.push({ category, start, end, retention: retentionOf(category), label });
+      if (end > start) out.push({ category, start, end, retention: retentionOf(category), label, column });
     });
   }
   return out;

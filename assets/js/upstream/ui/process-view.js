@@ -4,6 +4,7 @@ import { addManualItem, resplitItems, toggleItem } from '../core/detector.js';
 import { detectDocument, detectShort } from '../../jill/detect.js'; // jill_deid patch (PATCHES.md P1-4): detection in a worker
 import { redactWithLinks, textLinks } from '../../jill/links/markdown.js'; // jill_deid patch (PATCHES.md P1-6)
 import { scanUri } from '../../jill/uri-scan.js';
+import { insertAfterOffset } from '../../jill/preview-insert.js'; // jill_deid patch (PATCHES.md P1-10)
 import { redactLinks } from '../../jill/links/rels.js'; // jill_deid patch (PATCHES.md P1-7)
 import { applyRedactions, blankOut, isPartial, mergeMappings, outputFor, previewLabel,                  } from '../core/redactor.js';
 import { CodeBook, parseMarkers } from '../core/codes.js';
@@ -102,6 +103,7 @@ const state        = {
   presetId: null, // jill_deid: the preset in use, its per-category retention and hyperlink mode (spec §3.4, §5.4)
   presetCustom: new Map(),
   hyperlinkMode: 'mask_pii_in_url',
+  keepProps: false, // jill_deid patch (P1-10): document properties are cleared unless the user keeps them (spec §5.5 DOCX 7)
 };
 
 // jill_deid patch (PATCHES.md P1-4): presets from the module settings (spec §3.4, §6.1 新增 1). Choosing one sets the
@@ -158,17 +160,124 @@ function applyOutputMode(d          )       {
 function redact(d, style = state.marker) {
   const org = orgCategories();
   const patterns = getEffectivePatterns();
-  const decide = (uri) => scanUri(uri, patterns, d.book, {
-    retentionOf: (c) => effectiveRetention(c, org), hyperlinkMode: state.hyperlinkMode, markerStyle: style,
-  });
-  if (!['docx', 'xlsx', 'pdf'].includes(d.doc.format)) return redactWithLinks(d.doc.text, d.items, style, textLinks(d.doc), decide);
+  // P1-10: the user's choice for one link (🔗: 取消去識別化／移除連結) wins over the automatic decision
+  const decide = (uri, link) => {
+    const choice = link && d.linkChoices?.get(link.id);
+    if (choice === 'keep') return { action: 'keep', hits: [], warnings: [], unrestorable: false };
+    if (choice === 'strip') return { action: 'strip', hits: [], warnings: ['user'], unrestorable: true };
+    return scanUri(uri, patterns, d.book, { retentionOf: (c) => effectiveRetention(c, org), hyperlinkMode: state.hyperlinkMode, markerStyle: style });
+  };
+  const opts = { keepProps: state.keepProps };
+  if (!['docx', 'xlsx', 'pdf'].includes(d.doc.format)) return { ...redactWithLinks(d.doc.text, d.items, style, textLinks(d.doc), decide), opts };
   // P1-7–P1-9: DOCX, XLSX and PDF links live outside the text; their texts (tooltips…) go through the normal scan
   const plain = (s) => {
     const items = detectShort(s, patterns, d.book);
     resplitItems(items, d.book, (it) => effectiveRetention(it, org));
     return applyRedactions(s, items, style);
   };
-  return redactLinks(d.doc.links ?? [], applyRedactions(d.doc.text, d.items, style), style, decide, plain);
+  return { ...redactLinks(d.doc.links ?? [], applyRedactions(d.doc.text, d.items, style), style, decide, plain), opts };
+}
+
+// ---------------------------------------------------------------------------------------
+// jill_deid patch (PATCHES.md P1-10): links on the page (spec §5.4, §6.1 新增 2, 3)
+// ---------------------------------------------------------------------------------------
+const HYPERLINK_LABELS = { mask_pii_in_url: '只遮網址中的個資', strip_link: '移除含個資的連結' };
+const LINK_WARNINGS = {
+  undecodable: '網址有無法解碼的片段（例如舊系統的 Big5 編碼），已整段隱藏',
+  host: '主機名稱本身是個資，放不下標記：輸出時移除連結，無法還原',
+  marker: '標記樣式不是「編碼」，網址放不下可還原的標記：含個資的連結改為移除',
+  manual: '手動新增的項目落在網址內：這個連結改為移除',
+  pdf: 'PDF 輸出不保留任何連結；這個連結含個資，輸出時會移除',
+  user: '你選擇移除這個連結（只留文字）',
+};
+const decodeUri = (u) => {
+  try {
+    return decodeURIComponent(u);
+  } catch {
+    return u;
+  }
+};
+const docLinks = (d) => (['docx', 'xlsx', 'pdf'].includes(d.doc.format) ? d.doc.links ?? [] : textLinks(d.doc));
+
+/** Links worth showing: with personal data or a warning, or with a choice the user made. */
+function linkEntries(d) {
+  if (docLinks(d).length === 0) return [];
+  return redact(d).links.filter(({ link, decision }) => d.linkChoices?.has(link.id) || decision.action !== 'keep' || decision.warnings.length > 0);
+}
+
+function linkText(d, link) {
+  if (link.displayRange) return d.doc.text.slice(...link.displayRange).trim() || '（空白）';
+  if (link.kind === 'pdf') return `第 ${link.page} 頁的連結`;
+  if (link.kind === 'xlsx-formula') return `儲存格 ${link.cell} 的 HYPERLINK 公式`;
+  return '（沒有顯示文字：圖片、頁首或文件設定中的連結）';
+}
+
+/** Before and after of one link, its warnings, and the choices (spec §6.1 新增 3). */
+function linkDetail(d, { link, decision }, done, extra = null) {
+  const choice = d.linkChoices?.get(link.id);
+  const set = (c) => {
+    d.linkChoices ??= new Map();
+    if (c) d.linkChoices.set(link.id, c);
+    else d.linkChoices.delete(link.id);
+    markDirty(d);
+    done();
+  };
+  const outcome = decision.action === 'rewrite' ? decodeUri(decision.uri)
+    : decision.action === 'strip' ? '（移除連結，只留文字）'
+      : choice === 'keep' ? '（保留原連結：含個資，不會去識別化）' : '（保留原連結）';
+  return el('div', { class: 'link-detail' },
+    el('div', {}, el('span', { class: 'muted small' }, '顯示文字　'), linkText(d, link)),
+    el('div', { class: 'small link-uri' }, el('span', { class: 'muted' }, '原連結　'), el('span', { class: 'mono' }, decodeUri(link.uri))),
+    el('div', { class: 'small link-uri' }, el('span', { class: 'muted' }, '輸出　　'), el('span', { class: 'mono' }, outcome)),
+    ...decision.warnings.map((w) => el('div', { class: 'small notice notice-inline' }, `⚠ ${LINK_WARNINGS[w] ?? w}`)),
+    el('div', { class: 'add-popup-row' },
+      link.writable === false ? null : choice !== 'keep' ? button('取消去識別化', () => set('keep'), 'btn btn-small') : null,
+      link.writable === false ? null : choice !== 'strip' && decision.action !== 'strip' ? button('移除連結', () => set('strip'), 'btn btn-small') : null,
+      link.writable === false ? null : choice ? button('恢復自動處理', () => set(null), 'btn btn-small btn-ghost') : null,
+      extra),
+  );
+}
+
+function showLinkPopup(anchor, d, entry, refresh, root) {
+  document.querySelector('.add-popup')?.remove();
+  const close = () => {
+    popup.remove();
+    anchor.focus();
+  };
+  const popup = el('div', { class: 'add-popup link-popup', role: 'dialog', 'aria-label': '連結的去識別化' },
+    linkDetail(d, entry, () => {
+      popup.remove();
+      refresh();
+    }, button('關閉', close, 'btn btn-small btn-ghost')),
+  );
+  popup.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') close();
+  });
+  placePopup(popup, anchor.getBoundingClientRect(), root);
+  popup.querySelector('button')?.focus();
+}
+
+/** 🔗 after the text of each link with personal data; returns the links it could not place (listed above instead). */
+function placeLinkButtons(preview, d, entries, refresh, root) {
+  // ponytail: Word and plain text only; Excel switches sheets and PDF redraws pages inside preview.js, which would drop the buttons
+  const inline = ['md', 'txt', 'docx'].includes(d.doc.format);
+  return entries.filter((entry) => {
+    if (!inline || !entry.link.displayRange) return true;
+    const b = el('button', { type: 'button', class: 'link-flag', 'aria-label': '這個連結含個資：檢視與處理', title: '這個連結含個資：檢視與處理' }, '🔗');
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showLinkPopup(b, d, entry, refresh, root);
+    });
+    return !insertAfterOffset(preview, entry.link.displayRange[1], b);
+  });
+}
+
+function renderLinkList(d, entries, refresh) {
+  if (entries.length === 0) return null;
+  return el('details', { class: 'output-section doc-links', open: true },
+    el('summary', {}, `文件連結（${entries.length} 個含個資或已調整）`),
+    el('ul', { class: 'item-list' }, ...entries.map((entry) => el('li', { class: 'item' }, linkDetail(d, entry, refresh)))),
+  );
 }
 
 function applyOutputModeToAll()       {
@@ -586,11 +695,13 @@ function renderWorkspace(root             )              {
   const preview = el('div', { class: 'preview', tabindex: '0' });
   const sidebar = el('aside', { class: 'sidebar' });
   const outputHost = el('div', {});
+  const linksHost = el('div', {}); // jill_deid patch (P1-10): 文件連結 (spec §6.1 新增 3)
   const headTools = el('div', { class: 'preview-head-tools' });
   const previewWrap = el('div', { class: 'preview-wrap' },
     el('div', { class: 'preview-head' }, el('h5', {}, '去識別化預覽'), headTools),
     el('p', { class: 'muted small preview-desc' }, `預覽即下載後的樣子${restorable() ? '（編碼以 [類別] 顯示）' : ''}：點標記可取消、圈選文字可新增，滑鼠停留可看原文。${previewHint(d.doc)}`),
     outputHost,
+    linksHost,
     preview,
   );
   const ws = el('div', { class: 'workspace' });
@@ -616,6 +727,10 @@ function renderWorkspace(root             )              {
     ws.classList.toggle('workspace-with-files', state.docs.length > 1);
     sidebar.hidden = !state.showList;
     renderPreview(preview, refresh, root);
+    // jill_deid patch (P1-10): 🔗 after each link with personal data; the rest are listed above the preview
+    clear(linksHost);
+    const list = renderLinkList(d, placeLinkButtons(preview, d, linkEntries(d), refresh, root), refresh);
+    if (list) linksHost.append(list);
     if (state.showList) renderSidebar(sidebar, preview, refresh);
   };
   if (state.docs.length > 1) ws.append(renderFilePanel(root));
@@ -651,9 +766,26 @@ function renderOutputPanel(root             )              {
       }),
     );
   const [markerExample, markerNote] = MARKER_NOTES[state.marker];
+  // jill_deid patch (P1-10): 超連結 and document properties (spec §5.4, §5.5 DOCX 7, §6.1 新增 2)
+  const hasLinks = state.docs.some((d) => docLinks(d).some((l) => l.writable !== false));
+  const hasProps = state.docs.some((d) => d.doc.format === 'docx' || d.doc.format === 'xlsx');
+  const setHyperlinkMode = (mode) => {
+    state.hyperlinkMode = mode;
+    for (const d of state.docs) markDirty(d);
+    render(root);
+  };
+  const props = el('input', { type: 'checkbox' });
+  props.checked = !state.keepProps;
+  props.addEventListener('change', () => {
+    state.keepProps = !props.checked;
+    for (const d of state.docs) markDirty(d);
+    render(root);
+  });
   const notices = [
     state.outputMode === 'preview' ? '部分保留會露出姓氏、證號前 2 碼、手機前 4 碼等，並非完全匿名' : '',
     restorable() ? '' : `不需還原：只下載文件、沒有編碼表${state.marker === 'blank' ? '；空白佔位會保留原本的字數，需要更高的匿名性請選「類別」' : ''}`,
+    hasLinks && !restorable() ? '標記不是「編碼」時，網址放不下可還原的標記，含個資的連結會移除（只留文字）' : '', // H11
+    hasProps && state.keepProps ? '保留文件屬性：作者、最後修改者、公司會留在輸出檔' : '',
   ].filter(Boolean);
   const section = (cls        , title        , open         , onToggle                         , ...body                        ) => {
     const d = el('details', { class: `output-section ${cls}`, open }, el('summary', {}, title), ...body.filter((b)                   => b !== null))                      ;
@@ -710,6 +842,17 @@ function renderOutputPanel(root             )              {
         segmented('marker-style', MARKER_LABELS, state.marker, setMarker),
         el('span', { class: 'output-row-note small muted' }, el('span', { class: exampleClass('') }, markerExample), `　${markerNote}`),
       ),
+      hasLinks ? el('div', { class: 'output-row', 'data-row': 'links' }, // jill_deid patch (P1-10)
+        el('span', { class: 'output-row-label' }, '超連結'),
+        segmented('hyperlink-mode', HYPERLINK_LABELS, state.hyperlinkMode, setHyperlinkMode),
+        el('span', { class: 'output-row-note small muted' }, state.hyperlinkMode === 'strip_link'
+          ? '含個資的連結只留文字，連結本身無法還原'
+          : '連結保留，網址中的個資換成標記（標記為「編碼」時可還原）'),
+      ) : null,
+      hasProps ? el('div', { class: 'output-row', 'data-row': 'props' },
+        el('span', { class: 'output-row-label' }, '文件屬性'),
+        el('label', { class: 'check-label small' }, props, ' 清除作者、最後修改者、公司（Word、Excel）'),
+      ) : null,
     ),
     notices.length ? el('p', { class: 'small notice notice-inline output-notice' }, `⚠ ${notices.join('；')}`) : null,
     section('by-category', `依類別調整（${present} 類）`, state.outputMode === 'custom' || state.categoriesOpen, (open) => (state.categoriesOpen = open),
@@ -969,7 +1112,8 @@ function renderSidebar(sidebar             , preview             , refresh      
         el('span', { class: `badge badge-${it.category}` }, it.category),
         el('span', { class: 'item-original' }, it.original),
         el('span', { class: 'item-mask muted' }, `→ ${previewLabel(it, state.marker)}`),
-        it.origin === 'manual' ? el('span', { class: 'tag' }, '手動') : null,
+        // jill_deid patch (P1-10): where the item came from (spec §6.1 新增 7)
+        el('span', { class: 'tag', title: it.column ? '整欄依欄首標籤偵測' : '' }, it.origin === 'manual' ? '手動' : it.column ? `欄首「${it.label}」` : '規則'),
       ),
       el('div', { class: 'item-meta' }, button(it.active ? '取消' : '加回', () => {
         try {
@@ -986,7 +1130,37 @@ function renderSidebar(sidebar             , preview             , refresh      
 
   sidebar.append(
     el('h5', {}, `偵測項目（生效 ${active.length} / 共 ${d.items.length}）`),
+    renderColumnBatch(d, refresh),
     d.items.length === 0 ? el('p', { class: 'muted' }, '目前沒有項目。可在預覽中圈選文字新增。') : list,
+  );
+}
+
+/** jill_deid patch (P1-10): a column found by its header is cancelled or added back as a whole (spec §6.1 新增 7). */
+function renderColumnBatch(d, refresh) {
+  const columns = Map.groupBy(d.items.filter((it) => it.column), (it) => it.column);
+  if (columns.size === 0) return null;
+  return el('div', { class: 'column-batch' },
+    el('p', { class: 'small muted' }, '依欄首標籤偵測的整欄：'),
+    ...[...columns.values()].map((items) => {
+      const on = items.filter((it) => it.active).length;
+      const cancel = on > 0;
+      return el('div', { class: 'add-popup-row small' },
+        el('span', {}, `欄首「${items[0].label}」　生效 ${on} / ${items.length}`),
+        button(cancel ? '整欄取消' : '整欄加回', () => {
+          let blocked = 0;
+          for (const it of items) {
+            if (it.active !== cancel) continue;
+            try {
+              toggleItem(d.items, it.id);
+            } catch {
+              blocked++; // overlaps an item that is active now
+            }
+          }
+          if (blocked) toast(`${blocked} 筆與其他項目重疊，未加回`, 'info');
+          markDirty(d);
+          refresh();
+        }, 'btn btn-small'));
+    }),
   );
 }
 
@@ -1009,8 +1183,8 @@ function warnIfStale(partnerVer        , d          , partner        )       {
 }
 
 async function saveDoc(d          )                {
-  const { edits, links } = redact(d);
-  const blob = await generateDocument(d.doc, edits, links);
+  const { edits, links, opts } = redact(d);
+  const blob = await generateDocument(d.doc, edits, links, opts);
   downloadBlob(blob, outputFileName(d.doc.fileName, 'deid'));
   d.docVer = d.version;
 }

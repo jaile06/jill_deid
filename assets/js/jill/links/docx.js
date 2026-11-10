@@ -124,7 +124,7 @@ export function writeDocxLinks(zip, clones, pristine, decided) {
  * Residue upstream leaves (spec §5.5 DOCX 6–8, H15): the mc:Fallback copy of text boxes, tracked deletions and
  * moves, reviewer names on revisions and comments, people.xml, and the document properties.
  */
-export async function scrubDocx(zip, clones) {
+export async function scrubDocx(zip, clones, { keepProps = false } = {}) {
   for (const doc of clones.values()) {
     for (const el of all(doc)) {
       if ((el.namespaceURI === MC && el.localName === 'Fallback') || (el.namespaceURI === W && (el.localName === 'del' || el.localName === 'moveFrom'))) {
@@ -138,5 +138,5 @@ export async function scrubDocx(zip, clones) {
     for (const p of doc.getElementsByTagNameNS(W15, 'person')) if (p.hasAttributeNS(W15, 'author')) p.setAttributeNS(W15, 'w15:author', '');
     for (const el of [...doc.getElementsByTagNameNS(W15, 'presenceInfo')]) el.remove();
   });
-  await scrubProps(zip);
+  if (!keepProps) await scrubProps(zip); // the page may keep document properties (spec §5.5 DOCX 7)
 }
