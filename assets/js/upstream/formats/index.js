@@ -52,7 +52,7 @@ export async function generateDocument(doc                , edits            , l
     case 'docx':
       return (await import('./docx.js')).generateDocx(doc, edits, links); // jill_deid patch (PATCHES.md P1-7): decided link targets
     case 'xlsx':
-      return (await import('./xlsx.js')).generateXlsx(doc, edits);
+      return (await import('./xlsx.js')).generateXlsx(doc, edits, links); // jill_deid patch (PATCHES.md P1-8)
     case 'pdf':
       return (await import('./pdf.js')).generatePdf(doc, edits);
   }
@@ -78,7 +78,7 @@ export function formatLimitations(format           , ocr = false)               
     return 'PDF 輸出為文字版面重建：文字依原座標繪回，但圖片、圖形與原字型不會保留。此做法確保輸出檔內不殘留任何原始敏感文字。';
   }
   if (format === 'xlsx') {
-    return 'Excel 輸出保留儲存格樣式與工作表結構；處理文字與數值儲存格；公式結果、工作表名稱與註解不在偵測範圍，以數值儲存的電話已失去開頭的 0，可能比對不到。';
+    return 'Excel 輸出保留儲存格樣式與工作表結構；處理文字與數值儲存格、註解、超連結（含 HYPERLINK 公式）；其他公式的結果與工作表名稱不在偵測範圍，以數值儲存的電話已失去開頭的 0，可能比對不到。'; // jill_deid patch (P0-2, P1-8)
   }
   if (format === 'docx') {
     return 'Word 輸出保留原有樣式與表格；文字方塊、註解等特殊區域可能未涵蓋，請以預覽為準。';

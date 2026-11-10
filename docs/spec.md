@@ -437,7 +437,7 @@ function restoreUri(uri: string, mapping: MappingEntry[]): { uri: string; missin
 - 第 6 點擴大為清空所有元素的 `w:author`、`w:initials`（含 `w:rPrChange` 等格式修訂）。`custom.xml` 的屬性名稱任意，所有值一律清空（fail closed）。
 - 每次下載先還原 rels 等原始 XML，重複下載結果一致。
 - 第 7 點「UI 可關」的開關延到 4a；在那之前一律清空。
-- Word 實際開檔以 `tools/word-open.ps1` 驗證（不修復、不跳對話框），e2e 對 `fixtures/links.docx`（`tools/make-links-docx.ps1` 以 Word 產生）每次執行。
+- Word 實際開檔以 `tools/office-open.ps1` 驗證（不修復、不跳對話框），e2e 對 `fixtures/links.docx`（`tools/make-links-docx.ps1` 以 Word 產生）每次執行。
 
 **XLSX**
 
@@ -445,6 +445,13 @@ function restoreUri(uri: string, mapping: MappingEntry[]): { uri: string; missin
 2. 公式 `<f>HYPERLINK("url","text")</f>`：解析字串參數改寫，**同步改 `t="str"` 的 `<v>`**。上游不讀這類儲存格，要新增。不可沿用 `setInlineString`，它會刪除 `<f>`。
 3. 註解 `xl/comments*.xml`、`xl/threadedComments/*`：SHOULD。
 4. `docProps/*` 同 DOCX。
+
+實作補充（v3.8，Phase 3b-4，`jill/links/xlsx.js`；rels 與 DOCX 共用 `jill/links/rels.js`）：
+- 無 `r:id` 的 `<hyperlink location>`（活頁簿內部連結）同樣掃描 `display`、`tooltip`、`location`。Excel 會把網址本身寫進 `display`，所以這些文字也要掃網址內的編碼片段（`detectShort`）。
+- `HYPERLINK()` 只處理網址為字串常值的公式（名稱可為常值或參照）；`""` 視為 `"`。`strip` 時該格改成 inlineStr，只留顯示文字（已去識別化），`<f>` 移除。
+- 有公式被移除時刪除 `xl/calcChain.xml`，連同 `workbook.xml.rels` 的關係與 `[Content_Types].xml` 的 Override。否則 Excel 判定檔案損毀；calcChain 只是快取，Excel 開檔時會重建。
+- 第 3 點註解：`comments*.xml` 的 `<author>` 清空但保留元素（`authorId` 仍指得到）；`xl/persons/*.xml` 清空 `displayName`、`userId`（登入帳號，可能是 email）。
+- Excel 實際開檔以 `tools/office-open.ps1` 驗證，e2e 對 `fixtures/links.xlsx`（`tools/make-links-xlsx.ps1` 以 Excel 產生）每次執行。站上預設情境是 `strip_link`，所以「改寫網址」的路徑另由 `docx.test.js`、`xlsx.test.js` 以同一份 Office 範例檔驗證零殘留。
 
 **PDF**：輸出重建已滿足 INV-2。新增以 `page.getAnnotations()` 讀 `Link` 的 `url`、`rect`，`writable:false`，UI 顯示「此頁有含個資的連結，輸出時連結會移除」。輸出與還原都不重建連結。
 

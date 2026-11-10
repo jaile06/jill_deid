@@ -5,10 +5,10 @@
 //
 // The worker lives as long as the page: a new one would fetch its modules again, which fails offline under the
 // no-cache policy (spec §4, §9.1). If it cannot be (re)started, the remaining rules count as skipped.
-import { resolveOverlaps, toItems } from '../upstream/core/detector.js';
+import { resolveOverlaps, scanPattern, toItems } from '../upstream/core/detector.js';
 import { getPersonalHosts } from '../upstream/core/patterns.js';
 import { columnCandidates } from './columns.js';
-import { brokenTextCandidates } from './uri-scan.js';
+import { brokenTextCandidates, encodedTextCandidates } from './uri-scan.js';
 import { outsideLinks, textLinks } from './links/markdown.js';
 import { config } from './config.js';
 
@@ -77,6 +77,17 @@ export function scanInWorker(text, rules, watchdogMs = WATCHDOG_MS) {
   const run = queue.then(() => scanOnce(text, rules, watchdogMs));
   queue = run.catch(() => {});
   return run;
+}
+
+/**
+ * Items for a short text outside the document text (a link's tooltip, display or name attribute), on the main
+ * thread: the same candidates as detectDocument — percent-encoded URL parts included (spec §5.3) — minus columns.
+ * ponytail: no watchdog; such texts are a few hundred characters at most. Use the worker if that ever changes.
+ */
+export function detectShort(text, patterns, book) {
+  const enabled = patterns.filter((p) => p.enabled);
+  const cands = enabled.flatMap((p) => [...scanPattern(text, p), ...encodedTextCandidates(text, p)]);
+  return toItems(text, resolveOverlaps([...cands, ...brokenTextCandidates(text)]), book);
 }
 
 /** Items for `doc` with codes from `book`, and the names of rules skipped by the watchdog. */
