@@ -10,6 +10,8 @@ const CREATE = { process: createProcessView, patterns: createPatternsView, resto
 // What upstream puts on <body> (tooltip, toasts, dialogs, OCR screen, add popup) goes here, inside the CSS scope.
 const portal = document.createElement('div');
 portal.id = 'jill-deid-portal';
+portal.translate = false; // translate="no": browser and widget translators skip document content
+portal.className = 'notranslate';
 document.body.append(portal);
 
 const app = document.getElementById('jill-deid-app');

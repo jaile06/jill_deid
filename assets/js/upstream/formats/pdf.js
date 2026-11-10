@@ -11,7 +11,9 @@ import { distributeEdits,              } from './segments.js';
 import { sparseSubsetTtf } from './ttf-subset.js';
                                         
 
-pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
+// jill_deid patch (PATCHES.md P1-1): one worker for the page. With workerSrc, pdf.js starts (and fetches) a
+// new worker per document, which fails offline under the no-cache policy (spec §4, §9.1).
+pdfjs.GlobalWorkerOptions.workerPort = new Worker(workerSrc, { type: 'module' });
 
 const FONT_URL = `${assetsBase}fonts/NotoSansTC-Regular.ttf`;
 

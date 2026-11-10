@@ -145,7 +145,7 @@ modules/jill_deid/
 │   ├── .htaccess             ← 快取設定（§4）
 │   └── THIRD_PARTY_NOTICES.txt
 ├── docs/{spec.md,PATCHES.md,VENDOR.md,marker-in-uri.md}
-├── tools/{strip-upstream.mjs,check-har.php,make-h15.ps1}
+├── tools/{strip-upstream.mjs,check-har.php,e2e.mjs,make-h15.ps1}
 ├── tests/
 │   ├── rule_validate_test.php   ← 純 assert，免 XOOPS、免 PHPUnit
 │   └── browser/                 ← 瀏覽器測試頁（§9.2）：index.html、runner.js、patches.test.js（§4 修補）、§9.2 向量、leak-check.js、fixtures/、upstream/
@@ -279,7 +279,7 @@ PHP 以白名單驗證：`head`、`tail` 為 0–20 整數；`delimiter` 1–3 �
 4. **佈景相容調整（v3.7，機械式，跟進上游時自動重做）**：
    - `ui/` 的 `el('h2'`、`el('h3'` 降為 `h4`、`h5`。前台頁面標題是樣板的 `<h3>`，分頁內容從 `<h4>` 起。
    - `ui/` 中 `document.body.append(`、`*.ownerDocument.body.append(` 改為掛到 `#jill-deid-portal`，找不到時退回 `body`。portal 由 `jill/main.js` 建立，是 body 的直接子元素，定位方式與掛在 body 上相同。
-   - `src/styles.css` 轉成 `assets/css/upstream.css`。每條規則（含 `@media` 內）前面加上 `:is(#jill-deid-app, #jill-deid-portal)`；`:root`、`html`、`body` 換成這個範圍本身；`@keyframes` 不動；選擇器中的 `h2`、`h3` 同步降級。上游的 `:root { font-size: 15px }` 因此不再改動佈景的 `rem` 基準。
+   - `src/styles.css` 轉成 `assets/css/upstream.css`。每條規則（含 `@media` 內）前面加上 `:is(#jill-deid-app, #jill-deid-portal)`；`:root`、`html`、`body` 換成這個範圍本身；`@keyframes` 不動；選擇器中的 `h2`、`h3` 同步降級。上游的 `:root { font-size: 15px }` 因此不再改動佈景的 `rem` 基準。字型清單拿掉 `'Noto Sans TC'`：佈景從 Google Fonts 以 unicode-range 切片載入同名字型，上游一指名，瀏覽器就會依文件裡出現的字去抓對應分片。Phase 1b 實測選檔後出現 7 個 `fonts.gstatic.com` 請求，等於洩漏文件含哪些字，違反 INV-1 (c)；改用系統字型。
    - `ui/` 中呼叫原生 `confirm(` 的行尾加上 `// xoops-lint-ignore`。這 3 處是瀏覽器內的本機確認（刪除個人規則、移除未下載的檔案、全部清除），不是伺服器端刪除，沿用上游作法（§6.1）。
 
 | 上游 | 本模組 |
@@ -298,7 +298,7 @@ PHP 以白名單驗證：`head`、`tail` 為 0–20 整數；`delimiter` 1–3 �
 
 **第三方檔案**：版本以上游 `package-lock.json` 為準，由 npm registry 或 unpkg 下載一次。`docs/VENDOR.md` 記錄每個檔案的來源網址、版本與 SHA-256。
 
-**快取**：沒有打包就沒有帶 hash 的檔名，`?v=` 也傳不到子模組。`assets/.htaccess` 在 `<IfModule mod_headers.c>` 內對 `js/`、`vendor/`、`css/` 設 `Cache-Control: no-cache`，讓瀏覽器每次驗證 ETag，升級後才不會混用新舊模組。pdf.js 每份文件會重建一次 worker 並重新抓 `pdf.worker.min.js`（1.4 MB），在 `no-cache` 下斷網可能失敗，§9.1 斷網項目須含「同一頁處理第二份 PDF」；失敗才改為共用單一 worker（`GlobalWorkerOptions.workerPort`，下表已核准）。
+**快取**：沒有打包就沒有帶 hash 的檔名，`?v=` 也傳不到子模組。`assets/.htaccess` 在 `<IfModule mod_headers.c>` 內對 `js/`、`vendor/`、`css/` 設 `Cache-Control: no-cache`，讓瀏覽器每次驗證 ETag，升級後才不會混用新舊模組。pdf.js 每份文件會重建一次 worker 並重新抓 `pdf.worker.min.js`（1.4 MB），在 `no-cache` 下斷網可能失敗，§9.1 斷網項目須含「同一頁處理第二份 PDF」；Phase 1b 實測確實失敗（`Failed to fetch dynamically imported module … pdf.worker.min.js`），已改為共用單一 worker（P1-1）。
 
 **跟進上游**：不做自動合併。把新版轉到暫存目錄，與前一版轉換結果比對，再手動套入 `assets/js/upstream/`。
 
@@ -306,7 +306,7 @@ PHP 以白名單驗證：`head`、`tail` 為 0–20 整數；`delimiter` 1–3 �
 
 | 檔案 | 修改 |
 |---|---|
-| `formats/pdf.js`、`formats/ocr.js` | 改用 `jill/assets.js` 的 `assetsBase`（轉換工具已處理）；`ocr.js` 關閉 Tesseract 的 stderr 輸出，避免 console 錯誤訊息（§9.1）；`pdf.js` 視 §9.1 斷網實測改為共用單一 worker |
+| `formats/pdf.js`、`formats/ocr.js` | 改用 `jill/assets.js` 的 `assetsBase`（轉換工具已處理）；`ocr.js` 關閉 Tesseract 的 stderr 輸出，避免 console 錯誤訊息（§9.1）；**（P1-1，Phase 1b 實測）**`pdf.js` 改為整頁共用單一 worker（`GlobalWorkerOptions.workerPort`）：原本每份文件重抓 `pdf.worker.min.js`，斷網後第二份 PDF 失敗 |
 | `core/types.js` | `CATEGORIES` 可於執行期加入機構類別、§6.5 標籤類別與 `網址`；`LoadedDocument` 增加選用的 `links`（`LinkTarget[]`）。型別宣告已隨去型別移除，新程式以 JSDoc 標註 |
 | `core/retention.js` | `standardSplit` 增加 `case '網址'` |
 | `core/patterns.js` | 新增 `url` 規則（§5.2） |
@@ -442,6 +442,8 @@ function scanUri(uri: string, patterns: Pattern[], book: CodeBook): LinkDecision
 ### 6.1 前台 `index.php`：一般 XOOPS 流程，套佈景
 
 **決定**（2026-11-10 使用者修訂，取代原獨立頁方案）：前台與其他模組一致，走 `header.php`／`footer.php`、套佈景，不送 CSP。
+
+**Google 翻譯（v3.7）**：佈景的翻譯小工具會把整頁（含預覽中的個資）送到 Google。`index.php` 在佈景設定指派的樣板變數中拿掉 `google_translate` 項目，本頁不輸出小工具、也不載入它的 script；`#jill-deid-app` 與 `#jill-deid-portal` 另加 `translate="no"`、`notranslate`，瀏覽器內建翻譯也略過。
 
 **代價（MUST 知悉）**：佈景與區塊的 JS 和文件內容同源，可讀取預覽內容；佈景有行內腳本，無法套嚴格 CSP。零外傳（INV-1）因此只能以 §9.1 HAR 實測把關，佈景或區塊有變動時須重跑。
 
@@ -685,6 +687,7 @@ EMAIL=電子郵件
 - [ ] XOOPS 2.7.4＋PHP 8.3（`E:\my_xoops274`），`E_ALL` 下安裝、前後台操作 0 Error／Warning／Deprecated。例外（使用者決定不修，2026-11-10）：xbootstrap5 下 TadTools `preloads/core.php:231` 的 `Undefined array key "menu_var_kind"` 與 `class/Tools.php:650` 的兩則 `strpos()` Deprecated，起因是該佈景設定快取 `xoops_data/data/xbootstrap5_setup.json` 沒有 `menu_var_kind`，全站每頁都會出現，與本模組無關。
 - [ ] `php D:/workspace/02_Tools/xoops-lint/xoops-lint.php modules/jill_deid` 0 error。
 - [ ] DevTools 開 Preserve log，處理 5 種格式各一份並下載，匯出 HAR；`php tools/check-har.php <har> <樣本值檔>` 依 INV-1 確認：所有請求無 body、URL 與標頭不含樣本值；本模組路徑下的請求皆為同站 `GET`；第一個檔案選取後沒有任何第三方請求（以 HAR 的 `startedDateTime` 與操作時間比對，或在選檔前清空 log）。**不可用 grep CDN 字串驗收**，`tesseract.js` 內建預設網址字串必定命中。
+- [ ] `node tools/e2e.mjs [佈景 …]` 全部 PASS：以 headless Chrome 在佈景內載入上游範例（五種格式加掃描 PDF 的 OCR）、打包下載、斷網後處理第二份 PDF，並以 CDP 記錄的 HAR 跑 `check-har.php`（含 worker 的請求）。佈景或區塊有變動時重跑。
 - [ ] 同一輪確認在站上實際使用的佈景（至少 `xswatch5`、`xbootstrap5`）內，5 種格式與 OCR 都能跑完，console 0 個錯誤；HAR 中佈景與區塊發出的請求同樣不得帶文件內容。
 - [ ] 所有模組與 worker 的回應 `Content-Type` 為 JavaScript，`assets/` 內沒有 `.mjs`。
 - [ ] 修改 `assets/js/` 任一檔案後一般重新整理（不清快取），瀏覽器會取得新版（§4 快取設定生效）。
