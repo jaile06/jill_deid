@@ -1,7 +1,7 @@
 # 對上游的修改（spec §4）
 
-基準是 `tools/strip-upstream.mjs` 對上游 commit `1f7b9298` 的轉換結果（本 repo commit `a66e3be`）。
-`git diff a66e3be -- assets/js/upstream` 只能出現下表列出的修改；清單外的修改要先提問。
+基準是 `tools/strip-upstream.mjs` 對上游 commit `1f7b9298` 的轉換結果（含 v3.7 的佈景相容調整）。
+比對方式：把轉換工具輸出到暫存目錄，與 `assets/js/upstream/`、`assets/css/upstream.css` 做 `diff -r`；差異只能是下表列出的修改，清單外的修改要先提問。
 程式內以 `jill_deid patch (PATCHES.md <#>)` 註解標出位置。
 
 | # | 檔案 | 修改 | 原因 | 測試 |

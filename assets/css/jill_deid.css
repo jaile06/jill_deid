@@ -1,0 +1,10 @@
+/* Theme compatibility for the upstream interface (spec §6.1). The theme's Bootstrap shares class names with
+   upstream (.toast .tooltip .mark .btn .table .badge); only properties Bootstrap changes and upstream does
+   not set are put back here. Every selector stays inside the app and its portal. */
+:is(#jill-deid-app, #jill-deid-portal) [hidden] { display: none !important; }
+/* Bootstrap: .toast:not(.show) { display: none } */
+:is(#jill-deid-app, #jill-deid-portal) .toast { display: block; width: auto; max-width: none; border: 0; }
+/* Bootstrap: .tooltip { opacity: 0; display: block; margin; font-family } */
+:is(#jill-deid-app, #jill-deid-portal) .tooltip { opacity: 1; margin: 0; font-family: inherit; text-align: start; }
+/* Bootstrap: .mark { color: var(--bs-highlight-color); padding: .1875em } (upstream sets the padding) */
+:is(#jill-deid-app, #jill-deid-portal) .mark { color: inherit; }

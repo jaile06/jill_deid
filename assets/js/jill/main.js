@@ -1,41 +1,54 @@
-// Phase 1b: calls the upstream libraries directly inside the themed page to verify the five formats
-// and OCR (spec §8). Phase 4 replaces this file with the real interface.
-import { ACCEPT_ATTR, generateDocument, outputFileName, parseDocument } from '../upstream/formats/index.js';
-import { detect } from '../upstream/core/detector.js';
-import { BUILTIN_PATTERNS } from '../upstream/core/patterns.js';
-import { buildEdits } from '../upstream/core/redactor.js';
+// Entry: mounts the upstream views (assets/js/upstream/ui/) inside the themed page (spec §6.1). Replaces
+// upstream main.ts without its header, author links and FAQ; the tab buttons come from the template.
+import { installTooltips } from '../upstream/ui/components.js';
+import { createProcessView, hasUnsavedResults, syncPatternChanges } from '../upstream/ui/process-view.js';
+import { createPatternsView } from '../upstream/ui/patterns-view.js';
+import { createRestoreView } from '../upstream/ui/restore-view.js';
+
+const CREATE = { process: createProcessView, patterns: createPatternsView, restore: createRestoreView };
+
+// What upstream puts on <body> (tooltip, toasts, dialogs, OCR screen, add popup) goes here, inside the CSS scope.
+const portal = document.createElement('div');
+portal.id = 'jill-deid-portal';
+document.body.append(portal);
 
 const app = document.getElementById('jill-deid-app');
-const input = app.querySelector('#jill-deid-smoke-file');
-const ocr = app.querySelector('#jill-deid-smoke-ocr');
-const rows = app.querySelector('tbody');
-const tpl = app.querySelector('#jill-deid-smoke-row');
-input.accept = ACCEPT_ATTR;
+const nav = app.querySelector('.tabs');
+const panels = app.querySelector('.panels');
+const views = new Map();
 
-input.addEventListener('change', async () => {
-  for (const file of input.files) {
-    const row = tpl.content.firstElementChild.cloneNode(true);
-    const [name, format, chars, items, ms, out] = row.children;
-    name.textContent = file.name;
-    rows.append(row);
-    const t0 = performance.now();
-    try {
-      const onProgress = (p) => (ms.textContent = `${Math.round(p.progress * 100)}%`);
-      const doc = await parseDocument(file, ocr.checked ? { ocr: { onProgress } } : {});
-      const found = detect(doc.text, BUILTIN_PATTERNS);
-      const blob = await generateDocument(doc, buildEdits(found));
-      format.textContent = doc.ocr ? `${doc.format}+ocr` : doc.format;
-      chars.textContent = String(doc.text.length);
-      items.textContent = String(found.length);
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = outputFileName(file.name, 'deid');
-      a.textContent = a.download;
-      out.append(a);
-    } catch (e) {
-      out.textContent = e.message; // upstream messages are shown as-is (spec §4 i18n)
+const activate = (id) => {
+  document.querySelector('.add-popup')?.remove();
+  window.getSelection()?.removeAllRanges();
+  for (const t of Object.keys(CREATE)) {
+    nav.querySelector(`[data-tab="${t}"]`)?.classList.toggle('active', t === id);
+    let v = views.get(t);
+    if (!v && t === id) {
+      v = CREATE[t]();
+      views.set(t, v);
+      panels.append(v);
     }
-    ms.textContent = String(Math.round(performance.now() - t0));
+    if (v) v.hidden = t !== id;
   }
-  input.value = '';
+  // Pattern changes made in another tab should be visible on return (as upstream main.ts).
+  if (id === 'patterns') {
+    const fresh = createPatternsView();
+    views.get('patterns')?.replaceWith(fresh);
+    views.set('patterns', fresh);
+  }
+  if (id === 'process') syncPatternChanges();
+};
+
+nav.addEventListener('click', (e) => {
+  const id = e.target.closest('button[data-tab]')?.dataset.tab;
+  if (id) activate(id);
+});
+activate('process');
+installTooltips();
+
+window.addEventListener('beforeunload', (e) => {
+  if (hasUnsavedResults()) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
 });

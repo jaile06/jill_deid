@@ -10,7 +10,10 @@ header('Referrer-Policy: no-referrer');
 $GLOBALS['xoopsOption']['template_main'] = 'jill_deid_index.tpl';
 require_once XOOPS_ROOT_PATH . '/header.php';
 
-// ponytail: Config::toJson()（§7）於 Phase 2 加入；jill_deid.css、SweetAlert 於 Phase 4 介面需要時加入
+// ponytail: Config::toJson()（§7）於 Phase 2 加入
+// upstream.css 由轉換工具產生（限定在 #jill-deid-app 內）；jill_deid.css 補佈景 Bootstrap 的同名 class
+$xoTheme->addStylesheet('modules/jill_deid/assets/css/upstream.css');
+$xoTheme->addStylesheet('modules/jill_deid/assets/css/jill_deid.css');
 // vendor 由用到的模組自行 import（spec §4），這裡不載入
 $xoTheme->addScript('modules/jill_deid/assets/js/jill/main.js', ['type' => 'module']);
 

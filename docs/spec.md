@@ -1,6 +1,6 @@
 ---
 title: "XOOPS 模組開發規格書：文件去識別化工具（jill_deid）"
-version: 3.6
+version: 3.7
 created: 2026-11-06
 updated: 2026-11-10
 upstream: "https://github.com/dean9703111/data-deidentification @ 1f7b9298f94a9728cf6d181f84cfcce48c39d968（2026-10-16，MIT）"
@@ -36,8 +36,8 @@ related_entities:
 4. 上游程式碼取 frontmatter 所列 commit。§A 是已對照原始碼的事實，與實際程式不符時停下來回報。
 5. 一次只做一個 Phase（§8），通過該 Phase 驗收才進下一個。
 6. 標 `【待確認】` 的值先照草案實作並集中放置，不要因此停工；其餘未定義的行為一律提問，不要自行決定。
-7. **已定案，不要重新提議**（2026-11-06 使用者確認；2026-11-10 修訂前台）：前台走一般 XOOPS 流程、套佈景，不做獨立頁、不送 CSP（§6.1）；**前台介面以模組框架（Smarty 樣板＋Bootstrap 5＋語言常數＋TadTools）重寫，不使用上游 `ui/`、`main.ts`、`styles.css`，上游只取 `core/`、`formats/` 當函式庫**（§4，2026-11-10）；`mask_whole_url` 延後；基準為 XOOPS 2.7.4、PHP 8.3，不支援 2.5.11；資料表用 MyISAM；校務資料涵蓋學號、座號、員編、文號、身分證號、姓名、EMAIL（§6.4）；骨架由 `tad_xmod_maker` 產生；前台為 PHP＋原生 JS，開發與上線都不用 Node 建置（§4）。**v3.6（2026-11-10）使用者核准**：上游 P0 修補（DOCX offset、XLSX 數值格、`resolveOverlaps` 效能，§4）；偵測整段在單一 module worker（§3.3）；vendor 改由用到的模組自行 import（§4）；欄首標籤偵測（§6.5）；規則包修正（§6.4）。
-8. §A 的路徑與行號指上游 TypeScript 原始碼；`core/`、`formats/` 對應本模組 `assets/js/upstream/` 下的同名 `.js`。上游 `ui/` 不帶入，只作行為參考，要看時讀上游 commit 的原始碼。
+7. **已定案，不要重新提議**（2026-11-06 使用者確認；2026-11-10 修訂前台）：前台走一般 XOOPS 流程、套佈景，不做獨立頁、不送 CSP（§6.1）；**前台直接沿用上游介面 `ui/`、`styles.css` 與範例檔，只由轉換工具做佈景相容調整；不用 `main.ts`**（§4、§6.1，v3.7）；`mask_whole_url` 延後；基準為 XOOPS 2.7.4、PHP 8.3，不支援 2.5.11；資料表用 MyISAM；校務資料涵蓋學號、座號、員編、文號、身分證號、姓名、EMAIL（§6.4）；骨架由 `tad_xmod_maker` 產生；前台為 PHP＋原生 JS，開發與上線都不用 Node 建置（§4）。**v3.6（2026-11-10）使用者核准**：上游 P0 修補（DOCX offset、XLSX 數值格、`resolveOverlaps` 效能，§4）；偵測整段在單一 module worker（§3.3）；vendor 改由用到的模組自行 import（§4）；欄首標籤偵測（§6.5）；規則包修正（§6.4）。**v3.7（2026-11-10）使用者決定**：上游介面功能齊全（README「操作流程」步驟 1–7），改回沿用上游 `ui/` 與範例檔，取代 v3.5 的「介面自寫」；本模組新增功能以修補方式加在上游 `ui/`；xbootstrap5 下 TadTools 的警告不修（§9.1）。
+8. §A 的路徑與行號指上游 TypeScript 原始碼；`core/`、`formats/`、`ui/` 對應本模組 `assets/js/upstream/` 下的同名 `.js`；`styles.css` 對應轉換工具產生的 `assets/css/upstream.css`。
 
 ---
 
@@ -53,16 +53,16 @@ related_entities:
 | CSV | `code,category,original[,kept_prefix,kept_suffix]`；`original` 只存被隱藏的部分。還原只以 `code` 查表 | `core/csv.ts`、`core/restorer.ts` |
 | 偵測 | `detect(text, patterns, book)` 為**同步**函式，在主執行緒執行；重疊時最長者優先（`resolveOverlaps` 未 export）。呼叫點：`process-view.ts:239,279`。**`resolveOverlaps` 為 O(n²)**：實測 5,000 列名冊 239 ms、20,000 列 9.6 s（主執行緒凍結），8.2 萬候選單此函式 3.3 s（§4 修補） | `core/detector.ts` |
 | 管線 | 全部以 `LoadedDocument.text` 的 **offset** 運作（`RedactionItem.start/end`、`TextEdit`）。超連結 URI 不在 `text` 裡，**現行管線碰不到** | `core/types.ts` |
-| 輸出模式 | `OutputMode = 'code'（全部隱藏）\|'preview'\|'custom'`；`MarkerStyle = 'code'\|'label'\|'blank'`。`preview` 對所有類別套 `standardSplit`，未知類別預設露出第 1 字；`custom` 為 `overrides[類別] ?? it.retention`，未設定則全部隱藏。**這段邏輯在 UI 層，本模組不帶入 UI，`jill/state.js` MUST 重現並有測試** | `ui/process-view.ts:101-111` |
+| 輸出模式 | `OutputMode = 'code'（全部隱藏）\|'preview'\|'custom'`；`MarkerStyle = 'code'\|'label'\|'blank'`。`preview` 對所有類別套 `standardSplit`，未知類別預設露出第 1 字；`custom` 為 `overrides[類別] ?? it.retention`，未設定則全部隱藏。這段邏輯在 UI 層（本模組沿用），§3.4 策略對照以修補方式加在這裡 | `ui/process-view.ts:101-111` |
 | 個人規則 | `localStorage` key `deid.patternConfig.v1`：`{version, disabledBuiltins, customPatterns, retention?}` | `core/pattern-store.ts` |
-| 上限 | `MAX_FILES = 10`（UI 層，`state.js` 自行定義同值）、`MAX_FILE_BYTES = 100MB` | `process-view.ts:16`、`types.ts` |
-| 資產路徑 | `BASE_URL`（`./`）以 **document 網址**解析，共 3 處：`pdf.ts:14` 字型、`ocr.ts:605` OCR、`samples.ts:11` 範例（UI 層，本模組不帶入，範例清單改由樣板提供） | 見左 |
+| 上限 | `MAX_FILES = 10`（UI 層）、`MAX_FILE_BYTES = 100MB` | `process-view.ts:16`、`types.ts` |
+| 資產路徑 | `BASE_URL`（`./`）以 **document 網址**解析，共 3 處：`pdf.ts:14` 字型、`ocr.ts:605` OCR、`samples.ts:11` 範例（沿用上游範例清單與 `assets/samples/`）；轉換後皆為 `assetsBase` | 見左 |
 | DOCX | 只解析 `document.xml`、`header*`、`footer*` 的 `<w:t>`。**`mc:Fallback` 與 `w:del` 被跳過，內容原樣留在輸出檔**。**輸出時以第一個 `<w:t>` 的位置當 part 起點**：part 開頭有空段落、`<w:tab/>`、`<w:br/>` 時替換位置整體錯一格，實測輸出 `身分證[身分證:x]9[姓名:y]明`（末碼、末字外洩），**預覽卻正確**（§4 修補） | `formats/docx.ts` |
 | XLSX | 只處理 `t="s"`、`inlineStr` 儲存格；**數值儲存格（無 `t` 或 `t="n"`）不讀**，名冊的學號、座號原值留在輸出檔（§4 修補）；公式快取（`t="str"`）不讀；未被引用的 sharedStrings 已會清空 | `formats/xlsx.ts` |
 | 版面資訊 | `LoadedDocument.layout`：XLSX 每格有 `row`、`col`（`sheets[].cells`）；DOCX 段落有 `table:{id,row,col}`（`paragraphs[]`）。§6.5 用 | `formats/xlsx.ts`、`docx.ts` |
 | PDF | 以 `PDFDocument.create()` 重建，原 Annotation、Outline、Info 不會帶出 | `formats/pdf.ts` |
 | TXT／MD | 整段純文字，沒有連結語法意識 | `formats/plaintext.ts` |
-| UI 入口 | `main.ts` 匯入即 `mount()`，內含 `h1`、作者社群連結、`innerHTML`、FAQ dialog，**只能取代，不能包裝**。各分頁用 `h2`；`ui/*.js` 另有原生 `confirm()`、寫死中文；`styles.css` 含 `:root`、`*`、`body`、`h1`–`h3` 全域選擇器（Phase 1b 實測：套佈景時 255 個佈景元素中 230 個字級被改）。**因此本模組不使用上游 UI 層**（§4） | `src/main.ts`、`src/ui/`、`src/styles.css` |
+| UI 入口 | `main.ts` 匯入即 `mount()`，內含 `h1`、作者社群連結、`innerHTML`、FAQ dialog，**只能取代，不能包裝**。本模組以 `jill/main.js` 取代。各分頁用 `h2`、`h3`；`ui/*.js` 有 3 處原生 `confirm()`、寫死中文，**沒有 `innerHTML`**；7 處把元素掛在 `<body>`（tooltip、toast、處理中遮罩、提示 dialog、OCR 畫面、圈選浮窗、複製用 textarea）。`styles.css` 含 `:root`（`font-size: 15px`）、`*`、`body`、`h1`–`h3` 全域選擇器（Phase 1b 實測：套佈景時 255 個佈景元素中 230 個字級被改）。佈景 Bootstrap 有 10 個同名 class（`.active .badge .btn .btn-danger .btn-primary .mark .small .table .toast .tooltip`），其中 `.toast:not(.show)` 被隱藏、`.tooltip` 透明度 0。處理方式見 §4 轉換與 §6.1 | `src/main.ts`、`src/ui/`、`src/styles.css` |
 | UI 對 core 的依賴 | `core/`、`formats/` 不 import `ui/`（已驗證），UI 層可整層拿掉 | — |
 | OCR | 已指向同站資產，但 `tesseract.js` 程式內仍有 jsDelivr 預設網址字串（有傳路徑時不會連線）；預設以 blob URL 啟動 worker | `formats/ocr.ts:605-612` |
 
@@ -129,21 +129,18 @@ modules/jill_deid/
 │   └── Update.php
 ├── preloads/{autoloader,core}.php
 ├── templates/
-│   ├── jill_deid_index.tpl   ← 前台外框：h3 標題、nav-tabs、設定 JSON、三個 sub 樣板
-│   ├── sub_jill_deid_{process,rules,restore}.tpl  ← 三個分頁的靜態結構與 <template> 片段（§6.1）
+│   ├── jill_deid_index.tpl   ← 前台外框：h3 標題、分頁按鈕與使用說明連結（語言常數）、#jill-deid-app、設定 JSON
 │   ├── jill_deid_admin.tpl
 │   └── op_jill_deid_{rule,preset}_{index,form}.tpl
 ├── assets/
-│   ├── js/upstream/{core,formats}/*.js   ← 上游去型別後的函式庫，之後直接修改（§4）；不含 ui/
+│   ├── js/upstream/{core,formats,ui}/*.js   ← 上游去型別後的程式，含介面（§4）；修改逐條記入 PATCHES.md
 │   ├── js/jill/              ← 本模組前端，見下
-│   │   ├── main.js           ← 進入點：讀設定、接分頁、呼叫各頁 init
-│   │   ├── state.js          ← 檔案、偵測項目、情境與策略對照（純函式＋狀態，不碰 DOM，可測）
-│   │   ├── ui/{process,rules,restore}.js  ← 各分頁事件與 DOM 更新，只用 textContent／<template>
-│   │   ├── ui/dom.js         ← 共用：clone <template>、填值、SweetAlert 確認、下載
+│   │   ├── main.js           ← 進入點：取代上游 main.ts，建立 #jill-deid-portal、掛載上游三個分頁
 │   │   ├── columns.js        ← 欄首標籤偵測（§6.5，純函式）
-│   │   └── i18n.js、assets.js、uri-scan.js、links/*、regex.worker.js（§3.3，前後台共用）
+│   │   └── assets.js、uri-scan.js、links/*、regex.worker.js（§3.3，前後台共用）
 │   ├── vendor/               ← 第三方現成檔，勿手改；由用到的模組自行 import（§4），index.php 不載入
-│   ├── css/jill_deid.css     ← 本模組樣式，全部限定在 #jill-deid-app 之下，以 Bootstrap 為底只補必要部分
+│   ├── css/upstream.css      ← 轉換工具由上游 styles.css 產生，限定在 app 與 portal 內，勿手改（§4）
+│   ├── css/jill_deid.css     ← 只補佈景 Bootstrap 同名 class 改掉的屬性（§6.1），同樣限定範圍
 │   ├── fonts/NotoSansTC-Regular.ttf、ocr/{worker.min.js,core/,lang/}、samples/
 │   ├── .htaccess             ← 快取設定（§4）
 │   └── THIRD_PARTY_NOTICES.txt
@@ -227,9 +224,9 @@ CREATE TABLE `jill_deid_preset` (
 
 1. Worker 依序跑每條規則，開始前送 `{rule:id}`，全部跑完送 `{cands}`（已做 `resolveOverlaps`）。
 2. 主執行緒看門狗：同一條規則 2 秒沒有新訊息即 `terminate()`，記下該規則，重建 Worker 並跳過它重跑；UI 警示「規則 X 逾時已略過」。
-3. **逾時即 fail closed**：該檔有被略過的規則時，下載前以 SweetAlert 要求使用者確認「部分規則未執行，結果可能遺漏個資」。
+3. **逾時即 fail closed**：該檔有被略過的規則時，下載前要求使用者確認「部分規則未執行，結果可能遺漏個資」（沿用上游的確認方式）。
 4. 主執行緒以 `toItems(text, cands, book)` 產生項目並編碼（CodeBook 只在主執行緒）。§6.5 欄首候選與手動項目都在主執行緒併入，再做一次 `resolveOverlaps`。
-5. 呼叫端在本模組 `state.js`，以 async 包裝。
+5. 呼叫端在上游 `ui/process-view.js` 的兩個 `detect()` 呼叫點（§A），改為 async（§4 修補）。
 
 **XSS**：後台 Smarty 輸出一律 `|escape`；前台一律 `textContent`。
 
@@ -265,15 +262,25 @@ PHP 以白名單驗證：`head`、`tail` 為 0–20 整數；`delimiter` 1–3 �
 
 ## 4. 上游移植方式
 
-**只取用** `src/core/`、`src/formats/`、`tests/`、`public/fonts/`、`public/samples/`、`LICENSE`。不要帶入 `src/ui/`、`src/main.ts`、`src/styles.css`、`.claude/`、`.specify/`、`docs/`、`examples/`、`index.html`、SEO 檔、`llms*`、`og.png`。
+**只取用** `src/core/`、`src/formats/`、`src/ui/`、`src/styles.css`、`tests/`、`public/fonts/`、`public/samples/`、`LICENSE`。不要帶入 `src/main.ts`、`.claude/`、`.specify/`、`docs/`、`examples/`、`index.html`、SEO 檔、`llms*`、`og.png`。
 
-**分工（MUST）**：上游 `core/`、`formats/` 是函式庫（偵測、編碼、遮罩、還原、各格式解析與輸出、OCR），本模組只透過其 export 呼叫。畫面、流程、狀態、文字全部由本模組自寫（`assets/js/jill/`、樣板、語言檔），行為以上游 `ui/` 為參考但不複製其程式碼結構。
+**分工（MUST，v3.7）**：上游 `core/`、`formats/`、`ui/` 原樣沿用，介面、流程、狀態、範例都用上游的。本模組只負責：
+- 轉換時的佈景相容調整（見下方轉換第 4 點）；
+- `jill/main.js` 取代 `main.ts`，掛載三個分頁；
+- `assets/css/jill_deid.css` 處理 Bootstrap 同名 class；
+- 後台與 PHP 設定；
+- 下表核准的修補，包含本模組新增的功能。
 
 **一次性轉換**（`tools/strip-upstream.mjs`，執行者用現有的 Node 22.13 以上跑一次；結果提交進 repo，之後不再需要 Node）：
 
-1. 以 `node:module` 的 `stripTypeScriptTypes(src, {mode:'strip'})` 轉 `src/core/**/*.ts`、`src/formats/**/*.ts`，**只輸出這兩個目錄**。上游沒有 `enum`、`namespace` 或建構子參數屬性，去型別不改語意（已實測：全部成功，語法檢查 0 失敗）。
+1. 以 `node:module` 的 `stripTypeScriptTypes(src, {mode:'strip'})` 轉 `src/core/`、`src/formats/`、`src/ui/` 下的 `.ts`（不含 `main.ts`）。上游沒有 `enum`、`namespace` 或建構子參數屬性，去型別不改語意（已實測：全部成功，語法檢查 0 失敗）。
 2. 相對 import 補 `.js`，目錄 import 補 `/index.js`；套件 import 依下表改寫。**不用 import map**：全部改寫成相對路徑，免得依賴頁面上的行內 script，日後要恢復 CSP 也不必改。
 3. **第一個 commit 只放未修改的轉換結果**，之後 `git diff` 才看得出對上游的修改。
+4. **佈景相容調整（v3.7，機械式，跟進上游時自動重做）**：
+   - `ui/` 的 `el('h2'`、`el('h3'` 降為 `h4`、`h5`。前台頁面標題是樣板的 `<h3>`，分頁內容從 `<h4>` 起。
+   - `ui/` 中 `document.body.append(`、`*.ownerDocument.body.append(` 改為掛到 `#jill-deid-portal`，找不到時退回 `body`。portal 由 `jill/main.js` 建立，是 body 的直接子元素，定位方式與掛在 body 上相同。
+   - `src/styles.css` 轉成 `assets/css/upstream.css`。每條規則（含 `@media` 內）前面加上 `:is(#jill-deid-app, #jill-deid-portal)`；`:root`、`html`、`body` 換成這個範圍本身；`@keyframes` 不動；選擇器中的 `h2`、`h3` 同步降級。上游的 `:root { font-size: 15px }` 因此不再改動佈景的 `rem` 基準。
+   - `ui/` 中呼叫原生 `confirm(` 的行尾加上 `// xoops-lint-ignore`。這 3 處是瀏覽器內的本機確認（刪除個人規則、移除未下載的檔案、全部清除），不是伺服器端刪除，沿用上游作法（§6.1）。
 
 | 上游 | 本模組 |
 |---|---|
@@ -310,10 +317,13 @@ PHP 以白名單驗證：`head`、`tail` 為 0–20 整數；`delimiter` 1–3 �
 | `formats/docx.js` | **（P0，Phase 1b）** 解析時把 part 起點 offset 存進 part，輸出時沿用，不再以第一個 `<w:t>` 推算（§A）；其餘依 §5.5 擴充 |
 | `formats/xlsx.js` | **（P0，Phase 1b）** 數值儲存格（無 `t` 或 `t="n"`，且沒有 `<f>`）納入文字；只有被改到的格子轉成 inlineStr，其餘不動；其餘依 §5.5 擴充 |
 | `formats/pdf.js`、`plaintext.js` | 依 §5.5 擴充 |
+| `ui/process-view.js` | 情境下拉與策略對照（§3.4）、超連結處理與 `🔗`（§5.4、§6.1）、偵測改走 Worker 並 async（§3.3）、欄首候選（§6.5）與來源標示、逾時下載確認、跨檔案共用與規則合併機構規則 |
+| `ui/patterns-view.js` | 機構共用規則分組（唯讀，非 locked 可停用）、測試網址框 |
+| `ui/restore-view.js` | 接上 URI 位置還原（§5.3） |
 
-原上游 UI 的修改項（情境、超連結模式、`🔗`、機構規則分組、async 偵測、策略對照）改由本模組自寫，見 §6.1。
+本模組新增的功能（情境、超連結模式、`🔗`、機構規則分組、Worker 偵測、策略對照、欄首候選、逾時確認）都以修補方式加在上游 `ui/`，依上表逐條記錄於 `docs/PATCHES.md`。
 
-**i18n**：畫面上的固定文字一律寫在樣板，用語言常數。JS 需要的動態訊息（進度、錯誤、計數）由 `Config` 以 `i18n` 物件傳入，`jill/i18n.js` 的 `t(key, params)` 取用，缺 key 時顯示 key 本身以便發現遺漏。`assets/js/jill/` 不得硬寫中文。上游 `core/`、`formats/` 拋出的錯誤訊息（中文）原樣顯示，列入 `docs/PATCHES.md` 待辦。
+**i18n（v3.7）**：上游 `core/`、`formats/`、`ui/` 的中文原樣沿用；本模組在這些檔案內的修補，比照該檔使用中文。`assets/js/jill/`、樣板、PHP 不得硬寫中文：樣板用語言常數；`jill/` 需要的動態訊息由 `Config` 的 `i18n` 傳入。上游介面為中文，英文語系只涵蓋樣板與後台。
 
 ---
 
@@ -447,9 +457,8 @@ $GLOBALS['xoopsOption']['template_main'] = 'jill_deid_index.tpl';
 require_once XOOPS_ROOT_PATH . '/header.php';
 
 $xoopsTpl->assign('deid_config_json', Config::toJson());
-$xoTheme->addStylesheet('modules/jill_deid/assets/css/jill_deid.css');
-$xoTheme->addStylesheet('modules/tadtools/sweet-alert/sweet-alert.css');
-$xoTheme->addScript('modules/tadtools/sweet-alert/sweet-alert.js');
+$xoTheme->addStylesheet('modules/jill_deid/assets/css/upstream.css');   // 轉換工具產生（§4）
+$xoTheme->addStylesheet('modules/jill_deid/assets/css/jill_deid.css');  // Bootstrap 同名 class 相容
 // vendor 由用到的模組自行 import（§4），這裡不載入
 $xoTheme->addScript('modules/jill_deid/assets/js/jill/main.js', ['type' => 'module']);
 
@@ -458,21 +467,26 @@ require_once XOOPS_ROOT_PATH . '/footer.php';
 
 #### 介面寫法（MUST）
 
-- **結構在樣板**：`jill_deid_index.tpl` 放 `<h3>` 頁面標題、Bootstrap `nav-tabs`（`role="tablist"`、方向鍵切換）、`<script id="jill-deid-config" type="application/json">`，並 include 三個 `sub_jill_deid_{process,rules,restore}.tpl`。分頁內標題從 `<h4>` 起。
-- **文字在語言檔**：樣板內所有文字用 `_MD_JILLDEID_*`；JS 動態訊息走 `t(key)`（§4 i18n）。
-- **重複區塊用 `<template>`**：檔案卡、偵測項目列、規則列、範例卡等寫成樣板中的 `<template>`，JS 以 `cloneNode` 複製後用 `textContent` 填值。**禁用 `innerHTML`** 插入任何來自文件或使用者的內容。
-- **樣式**：以佈景的 Bootstrap 5 為主；`assets/css/jill_deid.css` 只補 Bootstrap 沒有的部分（標記底色、預覽版面），所有選擇器以 `#jill-deid-app` 開頭，不得有全域選擇器。
-- **確認對話框**：刪除個人規則、移除未下載的檔案、全部清除等破壞性操作，用 TadTools SweetAlert（`globalThis.swal`）確認，禁原生 `confirm()`／`alert()`。一般提示用 Bootstrap toast。
-- **狀態與畫面分離**：`state.js` 不碰 DOM，包含檔案清單、偵測項目、CodeBook、情境與策略對照（§3.4、§A 輸出模式）；`ui/*.js` 只處理事件與畫面更新。
-- 互動元件 ≥ 44×44 px，純圖示按鈕有 `visually-hidden` 文字（§9.4）。
+- **沿用上游介面（v3.7）**：`jill/main.js` 取代上游 `main.ts`，不含頁首、作者連結與 FAQ。它負責：
+  - 建立 `#jill-deid-portal`；
+  - 依樣板的分頁按鈕掛載上游三個分頁，切換邏輯與 `main.ts` 相同；
+  - 安裝 tooltip 與離開頁面前的提醒。
+- **結構在樣板**：`jill_deid_index.tpl` 放 `<h3>` 頁面標題、分頁按鈕、「使用說明」連結（連到上游 README「操作流程」，新分頁開啟）與 `#jill-deid-app`，文字都用 `_MD_JILLDEID_*`。設定 JSON 於 Phase 2 加入。
+- **標題層級**：上游的 `h2`、`h3` 由轉換工具降為 `h4`、`h5`（§4），分頁內不得出現 `h1`–`h3`。
+- **樣式**：
+  - `assets/css/upstream.css` 由轉換工具產生，不得手改。
+  - `assets/css/jill_deid.css` 只補佈景 Bootstrap 同名 class 改掉、上游又沒有設定的屬性。目前有四處：`[hidden]`、`.toast`（Bootstrap 的 `:not(.show)` 會隱藏）、`.tooltip`（透明度 0）、`.mark`（文字顏色）。
+  - 兩個檔案的每條規則都限定在 `:is(#jill-deid-app, #jill-deid-portal)` 內（`tests/browser/ui.test.js`）。
+- **確認對話框與提示**：沿用上游的作法，包括 3 處原生 `confirm()`、上游的提示 dialog 與 toast。
+- **`innerHTML`**：上游 `ui/` 沒有使用；`assets/js/jill/` 與樣板禁用。
 
-#### 必須重現的上游功能（以上游 `ui/` 行為為準）
+#### 上游功能（沿用，對應上游 README「操作流程」步驟 1–7，驗收時逐項確認）
 
 **去識別化頁**
 
 1. 選檔與拖放（`ACCEPT_ATTR`、`MAX_FILES`、`MAX_FILE_BYTES`），可一次多檔、可「加入檔案」追加。
 2. 貼上文字，按「開始去識別化」以純文字處理。
-3. 範例卡：載入或下載 `assets/samples/` 的範例（清單寫在樣板）。
+3. 範例卡：載入或下載 `assets/samples/` 的範例（沿用上游清單與檔案）。
 4. 掃描 PDF 的 OCR：進度（頁數、縮圖）與「取消辨識」。
 5. 每個檔案一張卡：偵測項目清單（類別、原值、預覽標記），可逐項取消，或依類別批次取消；類別統計；「重新偵測」；「移除」。
 6. 預覽：標記位置以底色顯示，可切「純文字檢視」；在預覽中圈選文字可「新增為去識別化項目」。
@@ -644,18 +658,18 @@ EMAIL=電子郵件
 | Phase | 產出 | 完成條件 |
 |---|---|---|
 | 1a 骨架 | 以 `tad_xmod_maker` 產生（見下）、建 git repo、放入 `docs/spec.md` 與 `CLAUDE.md`，再依本文補齊 `strict_types`、語言常數 | 可安裝、移除、升級，E_ALL 0 警告，xoops-lint 0 error |
-| 1b 前端驗證 | §4 轉換（只含 `core/`、`formats/`，vendor 改 side-effect import）與第三方檔案；§4 標 P0 的三項修補；`tests/browser/` 最小 runner 與 `patches.test.js`；在佈景內的頁面直接呼叫函式庫，確認五種格式與 OCR；以 H15 確認上游 DOCX 殘留 | H20、H21、H25 通過；不通過就停下回報，不進下一個 Phase |
+| 1b 前端驗證 | §4 轉換（`core/`、`formats/`、`ui/`，vendor 改 side-effect import，佈景相容調整）與第三方檔案；§4 標 P0 的三項修補；`tests/browser/` 最小 runner、`patches.test.js`、`ui.test.js`；上游介面掛載於佈景內，確認五種格式與 OCR；以 H15 確認上游 DOCX 殘留 | H20、H21、H25 與 `ui.test.js` 通過；不通過就停下回報，不進下一個 Phase |
 | 2 後台 | Rule、Preset、Config（含 `columnLabels`）、admin 樣板、規則包、`tests/rule_validate_test.php` | §9.3 |
-| 3a 前端基礎 | `state.js`（策略對照、resplit、檔案與項目狀態）、`i18n.js`、`ui/dom.js`、單一 module worker（§3.3）、`columns.js`（§6.5）、上游 `core`／`formats` 測試移植 | 移植的上游測試、`state.js` 測試、H22–H24 全過 |
+| 3a 前端基礎 | 單一 module worker（§3.3，修補 `ui/process-view.js` 改 async）、`columns.js`（§6.5）、上游 `core`／`formats`／`ui` 測試移植 | 移植的上游測試、H22–H24 全過 |
 | 3b-1 URI 核心 | `uri-scan.js`、`url` 規則、還原 regex、合約文件 | H1–H3、H10、H13、H17–H19、H26 |
 | 3b-2 Markdown | `links/markdown.js` | H9 |
 | 3b-3 DOCX | rels、欄位碼、Fallback／del、docProps | H4–H7、H15、H16 |
 | 3b-4 XLSX | hyperlinks、公式 | H8 |
 | 3b-5 PDF＋還原核心 | annotation 偵測、URI 還原 | H12、H14 |
-| 4a 去識別化頁 | `sub_jill_deid_process.tpl`、`ui/process.js`：§6.1 去識別化頁 1–11 項＋情境、超連結處理、`🔗` | H4、H11 的介面部分；§9.1 |
-| 4b 偵測規則頁 | `sub_jill_deid_rules.tpl`、`ui/rules.js`：§6.1 規則頁 1–4 項＋機構規則分組、測試網址 | §9.3 前台攔截兩項 |
-| 4c 還原頁 | `sub_jill_deid_restore.tpl`、`ui/restore.js` | H12 經介面操作一次 |
-| 4d 整合 | 範例、已知不涵蓋範圍說明、無障礙、語言檔補齊 | §9.4 |
+| 4a 去識別化頁 | 修補上游 `ui/process-view.js`：§6.1「本模組新增」1–3、7 項（情境、超連結處理、`🔗`、項目來源）、欄首候選、逾時確認；上游功能 1–11 項逐項驗收 | H4、H11 的介面部分；§9.1 |
+| 4b 偵測規則頁 | 修補上游 `ui/patterns-view.js`：機構規則分組、測試網址 | §9.3 前台攔截兩項 |
+| 4c 還原頁 | 修補上游 `ui/restore-view.js` 接上 URI 還原 | H12 經介面操作一次 |
+| 4d 整合 | 本模組範例（`hyperlinks.*`）、已知不涵蓋範圍說明、無障礙、語言檔補齊 | §9.4 |
 | 5 驗收 | lint、斷網實測、Office 手動開檔 | §9 全勾 |
 
 **Phase 1a 的 maker 設定**（`modules/tad_xmod_maker/index.php?op=add_Form`）：目錄名 `jill_deid`；`min_xoops` 2.7.4；`min_php` **改成 8.3**（預設 8.2）；資料表依 §3。後台選單只建規則與情境頁，前台只留 `index.php`，不建區塊。**不使用 maker 的 CRUD 與表單程式碼**，`pattern` 用 `getText`、刪除走 POST 等要求依 §3、§6.2 手寫。maker 產出的前台 `index.php` 依 §6.1 改寫。
@@ -668,7 +682,7 @@ EMAIL=電子郵件
 
 ### 9.1 環境與隱私
 
-- [ ] XOOPS 2.7.4＋PHP 8.3（`E:\my_xoops274`），`E_ALL` 下安裝、前後台操作 0 Error／Warning／Deprecated。
+- [ ] XOOPS 2.7.4＋PHP 8.3（`E:\my_xoops274`），`E_ALL` 下安裝、前後台操作 0 Error／Warning／Deprecated。例外（使用者決定不修，2026-11-10）：xbootstrap5 下 TadTools `preloads/core.php:231` 的 `Undefined array key "menu_var_kind"` 與 `class/Tools.php:650` 的兩則 `strpos()` Deprecated，起因是該佈景設定快取 `xoops_data/data/xbootstrap5_setup.json` 沒有 `menu_var_kind`，全站每頁都會出現，與本模組無關。
 - [ ] `php D:/workspace/02_Tools/xoops-lint/xoops-lint.php modules/jill_deid` 0 error。
 - [ ] DevTools 開 Preserve log，處理 5 種格式各一份並下載，匯出 HAR；`php tools/check-har.php <har> <樣本值檔>` 依 INV-1 確認：所有請求無 body、URL 與標頭不含樣本值；本模組路徑下的請求皆為同站 `GET`；第一個檔案選取後沒有任何第三方請求（以 HAR 的 `startedDateTime` 與操作時間比對，或在選檔前清空 log）。**不可用 grep CDN 字串驗收**，`tesseract.js` 內建預設網址字串必定命中。
 - [ ] 同一輪確認在站上實際使用的佈景（至少 `xswatch5`、`xbootstrap5`）內，5 種格式與 OCR 都能跑完，console 0 個錯誤；HAR 中佈景與區塊發出的請求同樣不得帶文件內容。
@@ -683,7 +697,7 @@ EMAIL=電子郵件
 
 上游測試以同一支工具去型別後放進 `tests/browser/upstream/`。`tests/unit` 的 `core`、`formats` 與 `tests/integration` 應移植；依賴 Node 或 jsdom 而無法直接跑的，改寫或列入 `docs/PATCHES.md` 的略過清單並寫明原因。**不得為了通過而略過與個資偵測、遮罩、還原相關的測試。**
 
-上游 UI 測試（`patterns-view`、`preview`、`output-panel`、`busy`、`seo` 等）不移植，因為 UI 層不帶入。但其中涉及個資結果的行為（輸出模式與保留方式對照、預覽標記、手動新增項目、批次取消）MUST 改寫成 `state.js` 的測試，逐條列入 `docs/PATCHES.md` 對照表。
+上游 UI 測試（`patterns-view`、`preview`、`output-panel`、`busy` 等）一併移植（v3.7）；`seo` 不移植，因為 `main.ts`、`index.html` 不帶入。原本依賴 jsdom 的測試在瀏覽器以真實 DOM 執行。涉及個資結果的行為（輸出模式與保留方式對照、預覽標記、手動新增項目、批次取消）MUST 移植，逐條列入 `docs/PATCHES.md` 對照表。
 
 預設 `mask_pii_in_url`、`marker=code`、`partial`。
 
@@ -732,7 +746,7 @@ Fixture 優先沿用上游 `tests/helpers/docx-builder.ts`、`xlsx-builder.ts` �
 ### 9.4 無障礙與語言
 
 - [ ] 前後台模組內容皆無 `<h1>`、`<h2>`，從 `<h3>` 起且層級不跳階。
-- [ ] `*.php`（語言檔除外）、`*.tpl`、`assets/js/jill/**/*.js` 無硬寫中文；`assets/js/jill/` 與樣板無 `innerHTML`、原生 `confirm()`／`alert()`；`assets/css/jill_deid.css` 無全域選擇器。
+- [ ] `*.php`（語言檔除外）、`*.tpl`、`assets/js/jill/**/*.js` 無硬寫中文（上游 `ui/` 依 §4 i18n 例外）；`assets/js/jill/` 與樣板無 `innerHTML`；`assets/css/upstream.css`、`jill_deid.css` 每條規則都在範圍內（`ui.test.js`）。
 - [ ] 互動元件 ≥ 44×44 px、文字對比 ≥ 4.5:1、純圖示按鈕有 `visually-hidden` 文字。
 - [ ] 鍵盤可完成整個流程；axe DevTools 0 個 serious／critical。
 
