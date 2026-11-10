@@ -148,10 +148,10 @@ modules/jill_deid/
 │   ├── .htaccess             ← 快取設定（§4）
 │   └── THIRD_PARTY_NOTICES.txt
 ├── docs/{spec.md,PATCHES.md,VENDOR.md,marker-in-uri.md}
-├── tools/{strip-upstream.mjs,check-har.php}
+├── tools/{strip-upstream.mjs,check-har.php,make-h15.ps1}
 ├── tests/
 │   ├── rule_validate_test.php   ← 純 assert，免 XOOPS、免 PHPUnit
-│   └── browser/                 ← 瀏覽器測試頁（§9.2）：index.html、runner.js、patches.test.js（§4 修補）、§9.2 向量、leak-check.js、upstream/
+│   └── browser/                 ← 瀏覽器測試頁（§9.2）：index.html、runner.js、patches.test.js（§4 修補）、§9.2 向量、leak-check.js、fixtures/、upstream/
 ├── CLAUDE.md、check.ps1
 ├── language/{tchinese_utf8,english}/{modinfo,main,admin}.php（english SHOULD，至少 modinfo）
 └── sql/mysql.sql
@@ -407,6 +407,7 @@ function scanUri(uri: string, patterns: Pattern[], book: CodeBook): LinkDecision
 5. 文字掃描範圍增加 `footnotes.xml`、`endnotes.xml`、`comments.xml`。
 6. **上游殘留修補（MUST）**：輸出時移除 `mc:Fallback`、`w:del`、`w:moveFrom` 節點；清空 `w:ins`、`w:del`、`w:comment` 的 `w:author`、`w:initials`。否則文字方塊與追蹤修訂的原文會留在檔案裡。
 7. `docProps/core.xml`、`app.xml`、`custom.xml` 的作者、最後修改者、公司 MUST 清空（預設開啟，UI 可關）。
+8. **`word/people.xml`（v3.6，H15 實測）**：修訂者名單，MUST 與第 6 點同步處理：清空 `w15:person` 的 `w15:author`，移除 `w15:presenceInfo`（登入 Office 時含帳號 ID，可能是 email）。
 
 **XLSX**
 
@@ -702,7 +703,7 @@ EMAIL=電子郵件
 | H12 | H1–H10 去識別化＋CSV 還原 | 顯示文字逐字一致；URI 依 §5.3 一致；H10 的路徑不得出現 `%2F` 類誤編碼 |
 | H13 | 損壞編碼 `%E7%8E` | 不拋例外；整個值以 `網址` 全遮蔽並警示；還原後回到原字串 |
 | H14 | PDF `/Link` 含身分證 | `.deid.pdf` 以 `qpdf --qdf` 展開後無原值、無 `/URI` |
-| H15 | DOCX 含文字方塊（`mc:Fallback`）與追蹤修訂刪除內容 | 解壓後全檔無原值；Word 可正常開啟 |
+| H15 | `tests/browser/fixtures/h15.docx`（`tools/make-h15.ps1` 以 Word 產生）：文字方塊（`mc:Fallback`）、追蹤修訂刪除內容、虛構作者 `測試作者` | 解壓後全檔無原值、無作者（含 `people.xml`）；Word 可正常開啟。Phase 1b 已記錄上游殘留（`h15.test.js`），3b-3 改為期待零殘留 |
 | H16 | 欄位碼被拆成 3 個 `instrText` run | 正確改寫，無殘片 |
 | H17 | 啟用校務網址參數規則，`?sid=112001` | 命中並只遮 value；`?other=112001` 不因此規則命中 |
 | H18 | Big5 `?name=%A4%FD%A4p%A9%FA` | 不拋例外，值全遮蔽並警示 |
