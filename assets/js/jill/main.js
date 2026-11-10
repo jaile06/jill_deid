@@ -1,52 +1,41 @@
-// Phase 1b entry: mounts the upstream views inside the XOOPS page (replaces upstream main.js, which is not loaded).
-// ponytail: tabs only. role="tablist", arrow keys and i18n come in Phase 3a (spec §4).
-import { el, installTooltips } from '../upstream/ui/components.js';
-import { createProcessView, hasUnsavedResults, syncPatternChanges } from '../upstream/ui/process-view.js';
-import { createPatternsView } from '../upstream/ui/patterns-view.js';
-import { createRestoreView } from '../upstream/ui/restore-view.js';
-
-const TABS = [
-  { id: 'process', label: '去識別化', create: createProcessView },
-  { id: 'patterns', label: '偵測規則', create: createPatternsView },
-  { id: 'restore', label: '還原', create: createRestoreView },
-];
+// Phase 1b: calls the upstream libraries directly inside the themed page to verify the five formats
+// and OCR (spec §8). Phase 4 replaces this file with the real interface.
+import { ACCEPT_ATTR, generateDocument, outputFileName, parseDocument } from '../upstream/formats/index.js';
+import { detect } from '../upstream/core/detector.js';
+import { BUILTIN_PATTERNS } from '../upstream/core/patterns.js';
+import { buildEdits } from '../upstream/core/redactor.js';
 
 const app = document.getElementById('jill-deid-app');
-const nav = el('nav', { class: 'tabs' });
-const panels = el('div', { class: 'panels' });
-const views = new Map();
+const input = app.querySelector('#jill-deid-smoke-file');
+const ocr = app.querySelector('#jill-deid-smoke-ocr');
+const rows = app.querySelector('tbody');
+const tpl = app.querySelector('#jill-deid-smoke-row');
+input.accept = ACCEPT_ATTR;
 
-const activate = (id) => {
-  document.querySelector('.add-popup')?.remove();
-  window.getSelection()?.removeAllRanges();
-  for (const t of TABS) {
-    nav.querySelector(`[data-tab="${t.id}"]`)?.classList.toggle('active', t.id === id);
-    let v = views.get(t.id);
-    if (!v && t.id === id) {
-      v = t.create();
-      views.set(t.id, v);
-      panels.append(v);
+input.addEventListener('change', async () => {
+  for (const file of input.files) {
+    const row = tpl.content.firstElementChild.cloneNode(true);
+    const [name, format, chars, items, ms, out] = row.children;
+    name.textContent = file.name;
+    rows.append(row);
+    const t0 = performance.now();
+    try {
+      const onProgress = (p) => (ms.textContent = `${Math.round(p.progress * 100)}%`);
+      const doc = await parseDocument(file, ocr.checked ? { ocr: { onProgress } } : {});
+      const found = detect(doc.text, BUILTIN_PATTERNS);
+      const blob = await generateDocument(doc, buildEdits(found));
+      format.textContent = doc.ocr ? `${doc.format}+ocr` : doc.format;
+      chars.textContent = String(doc.text.length);
+      items.textContent = String(found.length);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = outputFileName(file.name, 'deid');
+      a.textContent = a.download;
+      out.append(a);
+    } catch (e) {
+      out.textContent = e.message; // upstream messages are shown as-is (spec §4 i18n)
     }
-    if (v) v.hidden = t.id !== id;
+    ms.textContent = String(Math.round(performance.now() - t0));
   }
-  if (id === 'patterns') {
-    const fresh = createPatternsView();
-    views.get('patterns')?.replaceWith(fresh);
-    views.set('patterns', fresh);
-  }
-  if (id === 'process') syncPatternChanges();
-};
-
-for (const t of TABS) {
-  nav.append(el('button', { class: 'tab', 'data-tab': t.id, type: 'button', onClick: () => activate(t.id) }, t.label));
-}
-app.append(nav, panels);
-activate('process');
-installTooltips();
-
-window.addEventListener('beforeunload', (e) => {
-  if (hasUnsavedResults()) {
-    e.preventDefault();
-    e.returnValue = '';
-  }
+  input.value = '';
 });

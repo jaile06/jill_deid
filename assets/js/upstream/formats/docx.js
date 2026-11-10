@@ -1,3 +1,4 @@
+import '../../../vendor/jszip.min.js';
 const JSZip = globalThis.JSZip;
                                                                                    
 import { distributeEdits,              } from './segments.js';

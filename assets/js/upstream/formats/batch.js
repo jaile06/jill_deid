@@ -1,3 +1,4 @@
+import '../../../vendor/jszip.min.js';
 const JSZip = globalThis.JSZip;
                                                                                  
 import { applyRedactions, isPartial,                  } from '../core/redactor.js';

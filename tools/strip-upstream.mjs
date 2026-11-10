@@ -16,11 +16,12 @@ const srcRoot = resolve(upstream, 'src');
 const outRoot = resolve(outArg ?? join(dirname(fileURLToPath(import.meta.url)), '../assets/js/upstream'));
 
 // Package specifier -> replacement. `rel` paths are relative to assets/ and turned into a path
-// relative to each output file; `global` means a classic <script> already set globalThis[name].
+// relative to each output file; `umd` is imported for its side effect (a UMD loaded as a module sets
+// globalThis[global], in the page and in a module worker alike), then read from globalThis.
 const PACKAGES = {
-  'jszip': { global: 'JSZip' },
-  '@pdf-lib/fontkit': { global: 'fontkit' },
-  'libphonenumber-js': { global: 'libphonenumber' },
+  'jszip': { umd: 'vendor/jszip.min.js', global: 'JSZip' },
+  '@pdf-lib/fontkit': { umd: 'vendor/fontkit.umd.min.js', global: 'fontkit' },
+  'libphonenumber-js': { umd: 'vendor/libphonenumber-min.js', global: 'libphonenumber' },
   'pdf-lib': { rel: 'vendor/pdf-lib.esm.min.js' },
   'pdfjs-dist': { rel: 'vendor/pdf.min.js' },
   'tesseract.js': { rel: 'vendor/tesseract.esm.min.js' },
@@ -34,7 +35,8 @@ const walk = (dir) => readdirSync(dir).flatMap((n) => {
 
 let files = 0;
 let relFixed = 0;
-for (const file of walk(srcRoot)) {
+// Only the libraries; ui/ and main.ts are not brought in (spec §4)
+for (const file of ['core', 'formats'].flatMap((d) => walk(join(srcRoot, d)))) {
   const relPath = relative(srcRoot, file).replaceAll('\\', '/').replace(/\.ts$/, '.js');
   const outFile = join(outRoot, relPath);
   // assets/js/upstream/<relPath> -> path back to assets/
@@ -59,7 +61,7 @@ for (const file of walk(srcRoot)) {
     if (p.rel) return `import ${what} from '${fromAssets(p.rel)}';`;
     // default or namespace import -> the global itself; named imports -> destructure
     const binding = what.replace(/^\*\s+as\s+/, '');
-    return `const ${binding} = globalThis.${p.global};`;
+    return `import '${fromAssets(p.umd)}';\nconst ${binding} = globalThis.${p.global};`;
   });
   js = js.replace(/import\('([^'.][^']*)'\)/g, (m, spec) => {
     const p = PACKAGES[spec];

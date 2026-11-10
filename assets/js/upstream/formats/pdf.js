@@ -4,6 +4,7 @@ import * as pdfjs from '../../../vendor/pdf.min.js';
                                                                  
 const workerSrc = `${assetsBase}vendor/pdf.worker.min.js`;
 import { PDFDocument, PDFFont, PDFPage, rgb } from '../../../vendor/pdf-lib.esm.min.js';
+import '../../../vendor/fontkit.umd.min.js';
 const fontkit = globalThis.fontkit;
                                                                                                               
 import { distributeEdits,              } from './segments.js';

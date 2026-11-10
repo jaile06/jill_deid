@@ -1,6 +1,7 @@
 // Checks for international identifiers found by the builtin patterns (see specs/007-intl-pii-patterns):
 // phone numbers, payment cards, US social security numbers, IBANs, IPv6 addresses and dates of birth.
 // Each returns whether the match is valid, or how much of its start is (see Pattern.validate).
+import '../../../vendor/libphonenumber-min.js';
 const { isValidPhoneNumber, parsePhoneNumberFromString } = globalThis.libphonenumber;
 
 const digitsOf = (s        ) => s.replace(/\D/g, '');
