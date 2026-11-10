@@ -431,6 +431,14 @@ function restoreUri(uri: string, mapping: MappingEntry[]): { uri: string; missin
 7. `docProps/core.xml`、`app.xml`、`custom.xml` 的作者、最後修改者、公司 MUST 清空（預設開啟，UI 可關）。
 8. **`word/people.xml`（v3.6，H15 實測）**：修訂者名單，MUST 與第 6 點同步處理：清空 `w15:person` 的 `w15:author`，移除 `w15:presenceInfo`（登入 Office 時含帳號 ID，可能是 email）。
 
+實作補充（v3.8，Phase 3b-3，`jill/links/docx.js`）：
+- 一個連結＝一處引用：同一 rId 被引用幾次就有幾個連結，可各自決定。沒有引用的外部關係（例如套件層 `_rels/.rels`）算一個連結。
+- `strip`：`w:hyperlink` 保留文字、去掉外框；`a:hlinkClick`／`a:hlinkHover` 移除；其他引用移除該屬性；關係本身刪除。欄位碼刪除 begin、指令、separate、end 所在的 run，保留顯示結果；`fldSimple` 去掉外框。
+- 第 6 點擴大為清空所有元素的 `w:author`、`w:initials`（含 `w:rPrChange` 等格式修訂）。`custom.xml` 的屬性名稱任意，所有值一律清空（fail closed）。
+- 每次下載先還原 rels 等原始 XML，重複下載結果一致。
+- 第 7 點「UI 可關」的開關延到 4a；在那之前一律清空。
+- Word 實際開檔以 `tools/word-open.ps1` 驗證（不修復、不跳對話框），e2e 對 `fixtures/links.docx`（`tools/make-links-docx.ps1` 以 Word 產生）每次執行。
+
 **XLSX**
 
 1. `xl/worksheets/sheetN.xml` 的 `<hyperlink>`：`display`、`tooltip`、`location` 走一般偵測，`r:id` 目標由上述 `*.rels` 規則處理。

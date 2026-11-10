@@ -44,13 +44,13 @@ export async function parseDocument(file      , opts                  = {})     
   }
 }
 
-export async function generateDocument(doc                , edits            )                {
+export async function generateDocument(doc                , edits            , links = [])                {
   switch (doc.format) {
     case 'txt':
     case 'md':
       return generatePlainText(doc, edits);
     case 'docx':
-      return (await import('./docx.js')).generateDocx(doc, edits);
+      return (await import('./docx.js')).generateDocx(doc, edits, links); // jill_deid patch (PATCHES.md P1-7): decided link targets
     case 'xlsx':
       return (await import('./xlsx.js')).generateXlsx(doc, edits);
     case 'pdf':

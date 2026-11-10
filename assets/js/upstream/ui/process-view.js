@@ -1,9 +1,10 @@
                                                                                                       
 import { CATEGORIES, MAX_FILE_BYTES } from '../core/types.js';
-import { addManualItem, resplitItems, toggleItem } from '../core/detector.js';
+import { addManualItem, detect, resplitItems, toggleItem } from '../core/detector.js'; // jill_deid: detect for DOCX tooltips (P1-7)
 import { detectDocument } from '../../jill/detect.js'; // jill_deid patch (PATCHES.md P1-4): detection in a worker
 import { redactWithLinks, textLinks } from '../../jill/links/markdown.js'; // jill_deid patch (PATCHES.md P1-6)
 import { scanUri } from '../../jill/uri-scan.js';
+import { redactDocxLinks } from '../../jill/links/docx.js'; // jill_deid patch (PATCHES.md P1-7)
 import { applyRedactions, blankOut, isPartial, mergeMappings, outputFor, previewLabel,                  } from '../core/redactor.js';
 import { CodeBook, parseMarkers } from '../core/codes.js';
 import { parseMapping, serializeMapping } from '../core/csv.js';
@@ -157,9 +158,17 @@ function applyOutputMode(d          )       {
 function redact(d, style = state.marker) {
   const org = orgCategories();
   const patterns = getEffectivePatterns();
-  return redactWithLinks(d.doc.text, d.items, style, textLinks(d.doc), (uri) => scanUri(uri, patterns, d.book, {
+  const decide = (uri) => scanUri(uri, patterns, d.book, {
     retentionOf: (c) => effectiveRetention(c, org), hyperlinkMode: state.hyperlinkMode, markerStyle: style,
-  }));
+  });
+  if (d.doc.format !== 'docx') return redactWithLinks(d.doc.text, d.items, style, textLinks(d.doc), decide);
+  // P1-7: DOCX links live outside the text; their tooltips go through the normal scan (spec §5.5 DOCX 4)
+  const plain = (s) => {
+    const items = detect(s, patterns, d.book);
+    resplitItems(items, d.book, (it) => effectiveRetention(it, org));
+    return applyRedactions(s, items, style);
+  };
+  return redactDocxLinks(d.doc.links ?? [], applyRedactions(d.doc.text, d.items, style), style, decide, plain);
 }
 
 function applyOutputModeToAll()       {
@@ -1000,8 +1009,8 @@ function warnIfStale(partnerVer        , d          , partner        )       {
 }
 
 async function saveDoc(d          )                {
-  const { edits } = redact(d);
-  const blob = await generateDocument(d.doc, edits);
+  const { edits, links } = redact(d);
+  const blob = await generateDocument(d.doc, edits, links);
   downloadBlob(blob, outputFileName(d.doc.fileName, 'deid'));
   d.docVer = d.version;
 }
