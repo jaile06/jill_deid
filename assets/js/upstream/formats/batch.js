@@ -57,8 +57,9 @@ export async function buildArchive(entries              , merged                
   const unique = uniqueNamer();
   const manifest                     = [];
   const restorable = style === 'code';
-  for (const { doc, items } of entries) {
-    const { edits, mapping } = applyRedactions(doc.text, items, style);
+  for (const { doc, items, redact } of entries) {
+    // jill_deid patch (PATCHES.md P1-6): the view's redact() adds the link targets (spec §5.5)
+    const { edits, mapping } = redact ? redact(style) : applyRedactions(doc.text, items, style);
     const output = unique(outputFileName(doc.fileName, 'deid'));
     const mappingName = restorable ? unique(mappingFileName(doc.fileName)) : '';
     zip.file(output, await generateDocument(doc, edits));

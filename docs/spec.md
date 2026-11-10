@@ -444,8 +444,12 @@ function restoreUri(uri: string, mapping: MappingEntry[]): { uri: string; missin
 
 - `text`、`alt`、`title` 走一般偵測；`url` 範圍走 §5.1，並**從一般偵測排除**，以免同一處被改兩次。
 - 程式碼區塊內仍要掃描。
+- （v3.8，3b-2 實作）`<https://…>`、`<mailto:…>` 與裸網址**顯示在文字中**，屬 §5.3 文字層，照一般偵測處理，不走 §5.1；只有不顯示的網址（inline 的 `(url)`、定義 `[id]: url`、`href`／`src` 屬性值）是 URI 位置。
+- `strip` 時：inline 連結與圖片只留文字或 alt，定義整行移除，HTML 屬性值清空；被移除部分內的文字編輯一併捨棄。
+- 使用者手動新增的項目落在網址內時，該連結改為 `strip`（警示 `manual`），不與改寫衝突。
+- 每個輸出出口（下載文件、編碼表、複製、合併編碼表、打包）都經 `process-view` 的 `redact()`，以同一組設定改寫（PATCHES P1-6）。
 
-**TXT**：只處理裸網址與 `mailto:`、`tel:`。
+**TXT**：貼上的文字以 `.txt` 處理，所以 TXT 同樣辨識上列連結語法；其餘只有裸網址與 `mailto:`、`tel:`（文字層）。
 
 ---
 

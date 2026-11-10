@@ -9,6 +9,7 @@ import { resolveOverlaps, toItems } from '../upstream/core/detector.js';
 import { getPersonalHosts } from '../upstream/core/patterns.js';
 import { columnCandidates } from './columns.js';
 import { brokenTextCandidates } from './uri-scan.js';
+import { outsideLinks, textLinks } from './links/markdown.js';
 import { config } from './config.js';
 
 export const WATCHDOG_MS = 2000;
@@ -87,7 +88,8 @@ export async function detectDocument(doc, patterns, book) {
   const { cands, skipped } = await scanInWorker(doc.text, rules);
   const columns = columnCandidates(doc, config.columnLabels, (category) => enabled.find((p) => p.category === category)?.retention);
   return {
-    items: toItems(doc.text, resolveOverlaps([...cands, ...columns, ...brokenTextCandidates(doc.text)]), book),
+    // link URLs in the text go through scanUri at output instead (spec §5.5)
+    items: toItems(doc.text, resolveOverlaps(outsideLinks([...cands, ...columns, ...brokenTextCandidates(doc.text)], textLinks(doc))), book),
     skipped: skipped.map((id) => enabled.find((p) => p.id === id)?.name ?? id),
   };
 }

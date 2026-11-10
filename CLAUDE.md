@@ -14,7 +14,8 @@
 | 2 後台 | 已合併 main（2026-11-10）：Rule、Preset、Config、後台樣板、規則包；使用者已更新模組並在後台操作確認 |
 | 3a 前端基礎 | 已合併 main（2026-11-10）：單一 Worker 偵測（看門狗、fail closed）、機構規則併入、情境下拉與策略對照、欄首標籤偵測；瀏覽器 47/47＋3/3、e2e 兩個佈景 PASS（名冊 12/12）。上游測試移植移到 4d |
 | 3b-1 URI 核心 | 已合併 main（2026-11-10）：`jill/uri-scan.js`（`scanUri`、`restoreUri`、文字層編碼片段）、內建規則 16 `url`、`docs/marker-in-uri.md`；瀏覽器 62/62＋3/3、e2e 兩個佈景 PASS |
-| 3b-2 Markdown | 下一步 |
+| 3b-2 Markdown | 已合併 main（2026-11-10）：`jill/links/markdown.js`（連結網址排除一般偵測、輸出時 `scanUri` 改寫或 strip）、process-view `redact()` 統一輸出出口；瀏覽器 69/69＋3/3、e2e 兩個佈景 PASS（含 `links.md` 零殘留） |
+| 3b-3 DOCX | 下一步 |
 
 ## 本模組特有的鐵則（spec 摘要，細節回 spec 查）
 
@@ -39,3 +40,4 @@
 - （Phase 2、3b-1 再犯）含反斜線的內容（regex、JSON、命名空間）用 Write／Edit 工具寫檔，不要經 shell heredoc、`node -e` 或 `python -` heredoc，反斜線會被吃掉或改變。
 - （Phase 3a）**每次偵測都新建 Worker 會讓斷網失敗**（同 pdf.js 的問題）：`no-cache` 下新 Worker 要重抓模組。長駐的東西（Worker）整頁共用；e2e 的斷網項目會抓到。
 - （Phase 3b-1）**裸網址 regex 不能用排除式字元類**：`[^\s<>"']+` 會把緊接在網址後的中文（「。另見」）吞進網址，一併整條遮蔽。中文句子常不空格，網址只收 RFC 3986 字元。
+- （Phase 3b-2）**e2e 不可假設站台設定**：站上預設情境是 `strip_link`，連結被移除而非改寫；e2e 只驗「零殘留」，模式差異交給單元測試。Git Bash 的 `tar` 會把 `C:` 當遠端主機，解 zip 用 `C:/Windows/System32/tar.exe`。
