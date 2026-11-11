@@ -1,3 +1,6 @@
 jill_deid：XOOPS 2.7.4 文件去識別化模組（PHP 8.3、TadTools 4.0.8）
 文件解析、遮罩、還原全部在瀏覽器內完成，伺服器不接收文件。
-規格見 docs/spec.md（開發用，不隨正式版發布）。
+***************************************************************
+原開發者：林鼎淵（Dean Lin）
+GitHub：https://github.com/dean9703111/data-deidentification
+YouTube：https://www.youtube.com/watch?v=Mx7d0nSF61k
