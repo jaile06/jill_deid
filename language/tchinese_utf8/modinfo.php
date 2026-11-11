@@ -4,7 +4,8 @@ xoops_loadLanguage('modinfo_common', 'tadtools');
 
 define('_MI_JILLDEID_NAME', '文件去識別化');
 define('_MI_JILLDEID_DESC', '在瀏覽器內完成文件去識別化與還原，文件不上傳伺服器');
-define('_MI_JILLDEID_CREDITS', '移植自 data-deidentification（dean9703111，MIT）');
+define('_MI_JILLDEID_CREDITS', "原開發者：林鼎淵（Dean Lin），MIT 授權\nGitHub：https://github.com/dean9703111/data-deidentification\nYouTube：https://www.youtube.com/watch?v=Mx7d0nSF61k");
+define('_MI_JILLDEID_CREDITS_TITLE', '原始專案');
 define('_MI_JILLDEID_AUTHOR_WEB', 'jill 開發筆記');
 define('_MI_JILLDEID_ADM_RULE', '機構規則');
 define('_MI_JILLDEID_ADM_PRESET', '處理情境');

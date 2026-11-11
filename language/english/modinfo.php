@@ -4,7 +4,8 @@ xoops_loadLanguage('modinfo_common', 'tadtools');
 
 define('_MI_JILLDEID_NAME', 'Document De-identification');
 define('_MI_JILLDEID_DESC', 'De-identify and restore documents entirely in the browser; files are never uploaded');
-define('_MI_JILLDEID_CREDITS', 'Ported from data-deidentification (dean9703111, MIT)');
+define('_MI_JILLDEID_CREDITS', "Original author: Dean Lin (林鼎淵), MIT licence\nGitHub: https://github.com/dean9703111/data-deidentification\nYouTube: https://www.youtube.com/watch?v=Mx7d0nSF61k");
+define('_MI_JILLDEID_CREDITS_TITLE', 'Original project');
 define('_MI_JILLDEID_AUTHOR_WEB', 'jill dev notes');
 define('_MI_JILLDEID_ADM_RULE', 'Organization rules');
 define('_MI_JILLDEID_ADM_PRESET', 'Presets');
