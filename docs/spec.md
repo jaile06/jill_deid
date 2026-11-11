@@ -1,6 +1,6 @@
 ---
 title: "XOOPS 模組開發規格書：文件去識別化工具（jill_deid）"
-version: 3.9
+version: 3.10
 created: 2026-11-06
 updated: 2026-11-11
 upstream: "https://github.com/dean9703111/data-deidentification @ 1f7b9298f94a9728cf6d181f84cfcce48c39d968（2026-10-16，MIT）"
@@ -36,7 +36,7 @@ related_entities:
 4. 上游程式碼取 frontmatter 所列 commit。§A 是已對照原始碼的事實，與實際程式不符時停下來回報。
 5. 一次只做一個 Phase（§8），通過該 Phase 驗收才進下一個。
 6. 標 `【待確認】` 的值先照草案實作並集中放置，不要因此停工；其餘未定義的行為一律提問，不要自行決定。
-7. **已定案，不要重新提議**（2026-11-06 使用者確認；2026-11-10 修訂前台）：前台走一般 XOOPS 流程、套佈景，不做獨立頁、不送 CSP（§6.1）；**前台直接沿用上游介面 `ui/`、`styles.css` 與範例檔，只由轉換工具做佈景相容調整；不用 `main.ts`**（§4、§6.1，v3.7）；`mask_whole_url` 延後；基準為 XOOPS 2.7.4、PHP 8.3，不支援 2.5.11；資料表用 MyISAM；校務資料涵蓋學號、座號、員編、文號、身分證號、姓名、EMAIL（§6.4）；骨架由 `tad_xmod_maker` 產生；前台為 PHP＋原生 JS，開發與上線都不用 Node 建置（§4）。**v3.6（2026-11-10）使用者核准**：上游 P0 修補（DOCX offset、XLSX 數值格、`resolveOverlaps` 效能，§4）；偵測整段在單一 module worker（§3.3）；vendor 改由用到的模組自行 import（§4）；欄首標籤偵測（§6.5）；規則包修正（§6.4）。**v3.7（2026-11-10）使用者決定**：上游介面功能齊全（README「操作流程」步驟 1–7），改回沿用上游 `ui/` 與範例檔，取代 v3.5 的「介面自寫」；本模組新增功能以修補方式加在上游 `ui/`；xbootstrap5 下 TadTools 的警告不修（§9.1）。**v3.9（2026-11-11）使用者決定**：內建規則 16 由「個人頁網址」改為「IP 網段與連接埠」（`ip-net`，§5.2），個人頁整條遮蔽與模組設定 `url_personal_hosts` 取消。
+7. **已定案，不要重新提議**（2026-11-06 使用者確認；2026-11-10 修訂前台）：前台走一般 XOOPS 流程、套佈景，不做獨立頁、不送 CSP（§6.1）；**前台直接沿用上游介面 `ui/`、`styles.css` 與範例檔，只由轉換工具做佈景相容調整；不用 `main.ts`**（§4、§6.1，v3.7）；`mask_whole_url` 延後；基準為 XOOPS 2.7.4、PHP 8.3，不支援 2.5.11；資料表用 MyISAM；校務資料涵蓋學號、座號、員編、文號、身分證號、姓名、EMAIL（§6.4）；骨架由 `tad_xmod_maker` 產生；前台為 PHP＋原生 JS，開發與上線都不用 Node 建置（§4）。**v3.6（2026-11-10）使用者核准**：上游 P0 修補（DOCX offset、XLSX 數值格、`resolveOverlaps` 效能，§4）；偵測整段在單一 module worker（§3.3）；vendor 改由用到的模組自行 import（§4）；欄首標籤偵測（§6.5）；規則包修正（§6.4）。**v3.7（2026-11-10）使用者決定**：上游介面功能齊全（README「操作流程」步驟 1–7），改回沿用上游 `ui/` 與範例檔，取代 v3.5 的「介面自寫」；本模組新增功能以修補方式加在上游 `ui/`；xbootstrap5 下 TadTools 的警告不修（§9.1）。**v3.9（2026-11-11）使用者決定**：內建規則 16 由「個人頁網址」改為「IP 網段與連接埠」（`ip-net`，§5.2），個人頁整條遮蔽與模組設定 `url_personal_hosts` 取消。**v3.10（2026-11-11）使用者決定**：本模組不做無障礙驗收（§9.4 第 3、4 項），已加的樣式與修補保留。
 8. §A 的路徑與行號指上游 TypeScript 原始碼；`core/`、`formats/`、`ui/` 對應本模組 `assets/js/upstream/` 下的同名 `.js`；`styles.css` 對應轉換工具產生的 `assets/css/upstream.css`。
 
 ---
@@ -815,10 +815,12 @@ Fixture 優先沿用上游 `tests/helpers/docx-builder.ts`、`xlsx-builder.ts` �
 
 ### 9.4 無障礙與語言
 
-- [x] 前後台模組內容皆無 `<h1>`、`<h2>`，從 `<h3>` 起且層級不跳階。（Phase 5：前台由 `tools/a11y.mjs` 逐分頁檢查；後台樣板 h3→h4，`tests/eall_test.php` 渲染的後台頁面無 h1、h2）
+**v3.10（2026-11-11）使用者決定：本模組不做無障礙驗收**。下列第 3、4 項不再要求，`tools/a11y.mjs` 與 e2e 的無障礙檢查已移除；Phase 4d／5 為此加的樣式與修補（`jill_deid.css` 的尺寸、對比、焦點框、標題色，PATCHES.md P1-15、P1-16）照舊保留，但不再有測試把關。第 1、2 項屬佈景相容與程式規範，照舊。
+
+- [x] 前後台模組內容皆無 `<h1>`、`<h2>`，從 `<h3>` 起且層級不跳階。（Phase 5：後台樣板 h3→h4，`tests/eall_test.php` 渲染的後台頁面無 h1、h2；前台在 Phase 5 時由已移除的 `tools/a11y.mjs` 確認）
 - [x] `*.php`（語言檔除外）、`*.tpl`、`assets/js/jill/**/*.js` 無硬寫中文（上游 `ui/` 依 §4 i18n 例外）；`assets/js/jill/` 與樣板無 `innerHTML`；`assets/css/upstream.css`、`jill_deid.css` 每條規則都在範圍內（`ui.test.js`）。
-- [x] 互動元件 ≥ 44×44 px、文字對比 ≥ 4.5:1、純圖示按鈕有 `visually-hidden` 文字。（Phase 4d／5：`tools/a11y.mjs`，e2e 兩個佈景；P1-15、P1-16）
-- [x] 鍵盤可完成整個流程；axe DevTools 0 個 serious／critical。（Phase 5：axe 0 個、Enter 切換分頁、Tab 走到每個元件且有焦點框，由 `tools/a11y.mjs` 自動檢查；以鍵盤開啟檔案選擇視窗（去識別化頁空白狀態、還原頁兩個選檔區）由使用者 2026-11-11 手動確認）
+- ~~互動元件 ≥ 44×44 px、文字對比 ≥ 4.5:1、純圖示按鈕有 `visually-hidden` 文字。~~（v3.10 不要求；Phase 5 時曾以 `tools/a11y.mjs` 通過）
+- ~~鍵盤可完成整個流程；axe DevTools 0 個 serious／critical。~~（v3.10 不要求）（Phase 5：axe 0 個、Enter 切換分頁、Tab 走到每個元件且有焦點框，由 `tools/a11y.mjs` 自動檢查；以鍵盤開啟檔案選擇視窗（去識別化頁空白狀態、還原頁兩個選檔區）由使用者 2026-11-11 手動確認）
 
 ---
 

@@ -1,4 +1,3 @@
 .codegraph/
 .vscode/
 *.har
-node_modules/

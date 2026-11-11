@@ -22,8 +22,8 @@
 | P1-12 | `ui/patterns-view.js` | 「機構共用規則」分組（沒有就不顯示）：開關與內建規則共用 `setBuiltinEnabled`，locked 者開關停用、「全部啟用」略過；詳細資料顯示來源、是否必須啟用、是否檢查網址；「測試網址」框以 `jill/uri-scan.js` 的 `explainUri`／`scanUri` 列出各部分的原始值、解碼值、命中與輸出 | spec §6.1 新增 4、§9.3 第 4 項 | `patterns-ui.html` |
 | P1-13 | `ui/restore-view.js` | 還原改用 `jill/links/restore.js` 的 `restoreDocument`（內文＋連結目標＋連結文字），下載時把 `links` 交給 `generateDocument`；結果列出「已還原的連結」；「找不到編碼標記」的提示也看連結內的編碼 | 3b-5 的還原核心接上還原頁（spec §5.3、H12 經介面） | `restore-ui.html` |
 | P1-14 | `ui/samples.js` | 範例清單加入本模組的 `hyperlinks.docx`、`hyperlinks.xlsx`、`hyperlinks.md`（`tools/make-links-*.ps1` 產生，作者為虛構名稱） | spec §6.1 新增 5 | `upstream/index.html`（`ui` 測試）、e2e |
-| P1-15 | `ui/process-view.js`、`ui/patterns-view.js` | 工作區的「檔案」「去識別化預覽」「偵測項目」由 `h5` 改 `h4`（上游的「上傳文件」只在空白時出現，原本 h3 後直接接 h5）；規則分組的「全部啟用」移出 `<summary>`，由 `jill_deid.css` 疊回標頭列（分組收合時不顯示） | spec §9.4：標題不跳階；axe `nested-interactive` | `tools/e2e.mjs`（`tools/a11y.mjs`） |
-| P1-16 | `ui/process-view.js` | 純圖示按鈕（檔案的「×」、預覽中的「🔗」）：圖示 `aria-hidden`，名稱改為 `.visually-hidden` 文字（樣式在 `jill_deid.css`）；按鈕沒有 `data-start`，預覽圈選的位置換算不受影響 | spec §9.4 | `tools/a11y.mjs`（純圖示檢查） |
+| P1-15 | `ui/process-view.js`、`ui/patterns-view.js` | 工作區的「檔案」「去識別化預覽」「偵測項目」由 `h5` 改 `h4`（上游的「上傳文件」只在空白時出現，原本 h3 後直接接 h5）；規則分組的「全部啟用」移出 `<summary>`，由 `jill_deid.css` 疊回標頭列（分組收合時不顯示） | spec §9.4：標題不跳階；axe `nested-interactive` | 無（v3.10 不做無障礙驗收） |
+| P1-16 | `ui/process-view.js` | 純圖示按鈕（檔案的「×」、預覽中的「🔗」）：圖示 `aria-hidden`，名稱改為 `.visually-hidden` 文字（樣式在 `jill_deid.css`）；按鈕沒有 `data-start`，預覽圈選的位置換算不受影響 | spec §9.4 | 無（v3.10 不做無障礙驗收） |
 | P1-1 | `formats/pdf.js` | `GlobalWorkerOptions.workerPort` 整頁共用一個 module worker，取代 `workerSrc` | 每份文件重抓 worker，`no-cache` 下斷網處理第二份 PDF 失敗（spec §4、§9.1） | `tools/e2e.mjs` 斷網項目 |
 
 ## 待辦
