@@ -750,15 +750,15 @@ EMAIL=電子郵件
 
 ### 9.1 環境與隱私
 
-- [ ] XOOPS 2.7.4＋PHP 8.3（`E:\my_xoops274`），`E_ALL` 下安裝、前後台操作 0 Error／Warning／Deprecated。例外（使用者決定不修，2026-11-10）：xbootstrap5 下 TadTools `preloads/core.php:231` 的 `Undefined array key "menu_var_kind"` 與 `class/Tools.php:650` 的兩則 `strpos()` Deprecated，起因是該佈景設定快取 `xoops_data/data/xbootstrap5_setup.json` 沒有 `menu_var_kind`，全站每頁都會出現，與本模組無關。
-- [ ] `php D:/workspace/02_Tools/xoops-lint/xoops-lint.php modules/jill_deid` 0 error。
-- [ ] DevTools 開 Preserve log，處理 5 種格式各一份並下載，匯出 HAR；`php tools/check-har.php <har> <樣本值檔>` 依 INV-1 確認：所有請求無 body、URL 與標頭不含樣本值；本模組路徑下的請求皆為同站 `GET`；第一個檔案選取後沒有任何第三方請求（以 HAR 的 `startedDateTime` 與操作時間比對，或在選檔前清空 log）。**不可用 grep CDN 字串驗收**，`tesseract.js` 內建預設網址字串必定命中。
-- [ ] `node tools/e2e.mjs [佈景 …]` 全部 PASS：以 headless Chrome 在佈景內載入上游範例（五種格式加掃描 PDF 的 OCR）、打包下載、斷網後處理第二份 PDF，並以 CDP 記錄的 HAR 跑 `check-har.php`（含 worker 的請求）。佈景或區塊有變動時重跑。
-- [ ] 同一輪確認在站上實際使用的佈景（至少 `xswatch5`、`xbootstrap5`）內，5 種格式與 OCR 都能跑完，console 0 個錯誤；HAR 中佈景與區塊發出的請求同樣不得帶文件內容。
-- [ ] 所有模組與 worker 的回應 `Content-Type` 為 JavaScript，`assets/` 內沒有 `.mjs`。
-- [ ] 修改 `assets/js/` 任一檔案後一般重新整理（不清快取），瀏覽器會取得新版（§4 快取設定生效）。
-- [ ] 各功能各跑一次讓資產進快取後切 DevTools Offline，不重新整理，可完成去識別化與還原，**且同一頁再處理第二份 PDF 也成功**（§4 快取）。
-- [ ] 模組位於子目錄與不同網域路徑時，字型、OCR、範例都能載入（即 `assetsBase` 生效）。
+- [x] XOOPS 2.7.4＋PHP 8.3（`E:\my_xoops274`），`E_ALL` 下安裝、前後台操作 0 Error／Warning／Deprecated。（Phase 5：`tests/eall_test.php`，前台各允許佈景與後台每個顯示畫面；除錯模式關閉時 XOOPS 會 `error_reporting(0)`，網頁與記錄都看不到訊息，所以載入 XOOPS 後再設回 `E_ALL`。）例外（使用者決定不修，2026-11-10）：xbootstrap5 下 TadTools `preloads/core.php:231` 的 `Undefined array key "menu_var_kind"`、`:256` 的 `"openid_login"`（Phase 5 發現，同源）與 `class/Tools.php:650` 的兩則 `strpos()` Deprecated，起因是該佈景設定快取 `xoops_data/data/xbootstrap5_setup.json` 沒有 `menu_var_kind`，全站每頁都會出現，與本模組無關。
+- [x] `php D:/workspace/02_Tools/xoops-lint/xoops-lint.php modules/jill_deid` 0 error。（Phase 5：0 errors，`check.ps1`）
+- [x] （使用者 2026-11-11 決定以 `tools/e2e.mjs` 的 CDP HAR 代替手動 DevTools，同一支 `check-har.php`，含 worker 的請求）DevTools 開 Preserve log，處理 5 種格式各一份並下載，匯出 HAR；`php tools/check-har.php <har> <樣本值檔>` 依 INV-1 確認：所有請求無 body、URL 與標頭不含樣本值；本模組路徑下的請求皆為同站 `GET`；第一個檔案選取後沒有任何第三方請求（以 HAR 的 `startedDateTime` 與操作時間比對，或在選檔前清空 log）。**不可用 grep CDN 字串驗收**，`tesseract.js` 內建預設網址字串必定命中。
+- [x] `node tools/e2e.mjs [佈景 …]` 全部 PASS：以 headless Chrome 在佈景內載入上游範例（五種格式加掃描 PDF 的 OCR）、打包下載、斷網後處理第二份 PDF 並還原一份 Word（Phase 5 加入），並以 CDP 記錄的 HAR 跑 `check-har.php`（含 worker 的請求）。佈景或區塊有變動時重跑。
+- [x] 同一輪確認在站上實際使用的佈景（至少 `xswatch5`、`xbootstrap5`）內，5 種格式與 OCR 都能跑完，console 0 個錯誤；HAR 中佈景與區塊發出的請求同樣不得帶文件內容。（Phase 5：`node tools/e2e.mjs school2022 xbootstrap5 xswatch5` 全部 PASS；站台允許的佈景只有前兩個，xswatch5 為暫時加入允許清單後執行，結束即還原。xswatch5 的標題色 `#2fa4e7` 對比不足，已在 `jill_deid.css` 改回上游文字色）
+- [x] 所有模組與 worker 的回應 `Content-Type` 為 JavaScript，`assets/` 內沒有 `.mjs`。（Phase 5：`curl -I` 為 `text/javascript`，含 `ocr/worker.min.js`）
+- [x] 修改 `assets/js/` 任一檔案後一般重新整理（不清快取），瀏覽器會取得新版（§4 快取設定生效）。（Phase 5：`Cache-Control: no-cache`＋ETag；帶舊 ETag 的請求在檔案修改前 304、修改後 200）
+- [x] 各功能各跑一次讓資產進快取後切 DevTools Offline，不重新整理，可完成去識別化與還原，**且同一頁再處理第二份 PDF 也成功**（§4 快取）。（Phase 5：e2e 斷網後處理第二份 PDF，並以同次產出的 `contract.deid.docx`＋編碼表還原，24/24 原值）
+- [x] 模組位於子目錄與不同網域路徑時，字型、OCR、範例都能載入（即 `assetsBase` 生效）。（Phase 5：瀏覽器測試以 `http://127.0.0.1/…` 與暫時的子目錄 `/deidsub/nested/…` 執行，含上游 OCR、PDF 字型測試，全過）
 
 ### 9.2 超連結測試向量（瀏覽器測試頁，全部 MUST）
 
@@ -805,20 +805,20 @@ Fixture 優先沿用上游 `tests/helpers/docx-builder.ts`、`xlsx-builder.ts` �
 
 ### 9.3 後台
 
-- [ ] 自動化對照：第 1 項 `tests/rule_validate_test.php`；第 2 項 `tests/browser/rulepack.test.js`（lookbehind 須用瀏覽器 RegExp）；第 3、6 項與後台樣板 `tests/admin_db_test.php`；表單試跑 `tests/browser/admin-rule.test.js`。第 4 項於 Phase 4b 驗收；第 5 項需登入後台手動確認。
-- [ ] `php tests/rule_validate_test.php`：`(a+)+$`、`(\w*)*x`、`\1`、空字串匹配、`category` 含 `:`、11 字類別、內建類別 `姓名` 皆被拒；8 字中文類別、§6.4 全部 pattern 皆通過。
-- [ ] 匯入規則包後，§6.4 七類各以一筆同行標籤的虛構資料測試，全部命中，含 6、7 碼學號、1、2 碼座號與兩種文號。下列不命中：`學費 150000 元`、`座號 123`、`學號 11500123`，且員編規則不得命中 `A123456789`。內文 `?sid=112001 請查閱。` 只命中 `112001`。
-- [ ] 實際從表單儲存 `(?<!\d)1\d{5}` 與 `(?<y>\d{4})`，DB 內字串與輸入**完全相同**。
-- [ ] 新增校務網址參數規則（`apply_to_url=1`）後，前台重新整理可攔截 `?sid=112001`；設為 0 則不攔 URI。（Phase 4b：偵測規則頁「測試網址」框可直接看結果。站上實測 `apply_to_url=1` 只遮 `sid` 的值；設為 0 由 `patterns-ui.html` 驗證，未改動站上資料。）
-- [ ] 寫入 op 以 GET 呼叫、缺 token、非管理員皆被拒。
-- [ ] `is_default` 全站只有一筆。
+- [x] 自動化對照：第 1 項 `tests/rule_validate_test.php`；第 2 項 `tests/browser/rulepack.test.js`（lookbehind 須用瀏覽器 RegExp）；第 3、6 項與後台樣板 `tests/admin_db_test.php`；表單試跑 `tests/browser/admin-rule.test.js`。第 4 項於 Phase 4b 驗收；第 5 項 `tests/admin_guard_test.php`（Phase 5，含管理員 session）。
+- [x] `php tests/rule_validate_test.php`：`(a+)+$`、`(\w*)*x`、`\1`、空字串匹配、`category` 含 `:`、11 字類別、內建類別 `姓名` 皆被拒；8 字中文類別、§6.4 全部 pattern 皆通過。
+- [x] 匯入規則包後，§6.4 七類各以一筆同行標籤的虛構資料測試，全部命中，含 6、7 碼學號、1、2 碼座號與兩種文號。下列不命中：`學費 150000 元`、`座號 123`、`學號 11500123`，且員編規則不得命中 `A123456789`。內文 `?sid=112001 請查閱。` 只命中 `112001`。
+- [x] 實際從表單儲存 `(?<!\d)1\d{5}` 與 `(?<y>\d{4})`，DB 內字串與輸入**完全相同**。
+- [x] 新增校務網址參數規則（`apply_to_url=1`）後，前台重新整理可攔截 `?sid=112001`；設為 0 則不攔 URI。（Phase 4b：偵測規則頁「測試網址」框可直接看結果。站上實測 `apply_to_url=1` 只遮 `sid` 的值；設為 0 由 `patterns-ui.html` 驗證，未改動站上資料。）
+- [x] 寫入 op 以 GET 呼叫、缺 token、非管理員皆被拒。（Phase 5：`tests/admin_guard_test.php` 以 HTTP 實測未登入 GET／POST、管理員 GET、管理員缺 token 皆被拒且資料不變，管理員帶 token 為對照會成功；使用者另於後台手動送出無 token 表單，得 Token Validation Error）
+- [x] `is_default` 全站只有一筆。
 
 ### 9.4 無障礙與語言
 
-- [ ] 前後台模組內容皆無 `<h1>`、`<h2>`，從 `<h3>` 起且層級不跳階。
-- [ ] `*.php`（語言檔除外）、`*.tpl`、`assets/js/jill/**/*.js` 無硬寫中文（上游 `ui/` 依 §4 i18n 例外）；`assets/js/jill/` 與樣板無 `innerHTML`；`assets/css/upstream.css`、`jill_deid.css` 每條規則都在範圍內（`ui.test.js`）。
-- [ ] 互動元件 ≥ 44×44 px、文字對比 ≥ 4.5:1、純圖示按鈕有 `visually-hidden` 文字。
-- [ ] 鍵盤可完成整個流程；axe DevTools 0 個 serious／critical。
+- [x] 前後台模組內容皆無 `<h1>`、`<h2>`，從 `<h3>` 起且層級不跳階。（Phase 5：前台由 `tools/a11y.mjs` 逐分頁檢查；後台樣板 h3→h4，`tests/eall_test.php` 渲染的後台頁面無 h1、h2）
+- [x] `*.php`（語言檔除外）、`*.tpl`、`assets/js/jill/**/*.js` 無硬寫中文（上游 `ui/` 依 §4 i18n 例外）；`assets/js/jill/` 與樣板無 `innerHTML`；`assets/css/upstream.css`、`jill_deid.css` 每條規則都在範圍內（`ui.test.js`）。
+- [x] 互動元件 ≥ 44×44 px、文字對比 ≥ 4.5:1、純圖示按鈕有 `visually-hidden` 文字。（Phase 4d／5：`tools/a11y.mjs`，e2e 兩個佈景；P1-15、P1-16）
+- [x] 鍵盤可完成整個流程；axe DevTools 0 個 serious／critical。（Phase 5：axe 0 個、Enter 切換分頁、Tab 走到每個元件且有焦點框，由 `tools/a11y.mjs` 自動檢查；以鍵盤開啟檔案選擇視窗（去識別化頁空白狀態、還原頁兩個選檔區）由使用者 2026-11-11 手動確認）
 
 ---
 

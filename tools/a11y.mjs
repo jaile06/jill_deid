@@ -31,6 +31,12 @@ const CHECK = `(async () => {
     if (r.width && (r.width < 44 || r.height < 44)) out.push('target ' + Math.round(r.width) + '×' + Math.round(r.height) + ' <' + e.tagName.toLowerCase() + (e.className ? '.' + String(e.className).split(' ')[0] : '') + '> ' + name(e));
   }
   // preload: false, or axe refetches the theme's cross-origin stylesheets (the HAR check catches it)
+  // icon-only buttons (no letter in the visible text) carry their name as .visually-hidden text (spec §9.4)
+  for (const e of app.querySelectorAll('button, a[href], summary, [role=button]')) {
+    if (!e.checkVisibility()) continue;
+    const shown = [...e.childNodes].filter((n) => !(n.classList && n.classList.contains('visually-hidden'))).map((n) => n.textContent).join('');
+    if (!/[\\p{L}\\p{N}]/u.test(shown) && !e.querySelector('.visually-hidden')) out.push('icon-only without visually-hidden text <' + e.tagName.toLowerCase() + (e.className ? '.' + String(e.className).split(' ')[0] : '') + '> ' + shown.trim());
+  }
   const res = await axe.run(app, { resultTypes: ['violations'], preload: false });
   for (const v of res.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')) {
     for (const n of v.nodes) out.push('axe ' + v.impact + ' ' + v.id + ': ' + n.target.join(' ') + ' ' + (n.failureSummary || '').split('\\n')[1]?.trim());

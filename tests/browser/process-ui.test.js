@@ -35,7 +35,7 @@ describe('links on the processing page (spec §6.1 新增 2, 3)', () => {
     input.dispatchEvent(new Event('change', { bubbles: true }));
     await until(() => flags().length > 0);
     expect(flags().length).toBe(1);
-    expect(flags()[0].getAttribute('aria-label')).toBe('這個連結含個資：檢視與處理');
+    expect(flags()[0].querySelector('.visually-hidden').textContent).toBe('這個連結含個資：檢視與處理'); // P1-16
     expect(flags()[0].previousSibling.textContent.endsWith('點此查看')).toBe(true);
     expect($('[data-row="links"]') ? 'row' : 'none').toBe('row');
   });
