@@ -1,6 +1,6 @@
 // Phase 3b-1: personal data in link targets (spec §5.1–§5.3, H1–H3, H10, H13, H17–H19, H26).
 import { describe, expect, it } from './runner.js';
-import { BUILTIN_PATTERNS, setPersonalHosts } from '../../assets/js/upstream/core/patterns.js';
+import { BUILTIN_PATTERNS } from '../../assets/js/upstream/core/patterns.js';
 import { CodeBook } from '../../assets/js/upstream/core/codes.js';
 import { detect, resolveOverlaps, toItems, resplitItems } from '../../assets/js/upstream/core/detector.js';
 import { applyRedactions } from '../../assets/js/upstream/core/redactor.js';
@@ -8,8 +8,6 @@ import { restore } from '../../assets/js/upstream/core/restorer.js';
 import { brokenTextCandidates, restoreUri, scanUri } from '../../assets/js/jill/uri-scan.js';
 import { scanInWorker } from '../../assets/js/jill/detect.js';
 
-const HOSTS = ['facebook.com', 'line.me/ti/p', 'linkedin.com/in'];
-setPersonalHosts(HOSTS);
 const PARTIAL = { retentionOf: () => ({ mode: 'preview' }) }; // spec §9.2 default: 部分保留, code, mask_pii_in_url
 const scan = (uri, opts = PARTIAL, patterns = BUILTIN_PATTERNS, book = new CodeBook()) => scanUri(uri, patterns, book, opts);
 const C = '[0-9a-f]{6}';
@@ -41,14 +39,13 @@ describe('link targets (spec §5.1)', () => {
     expect(decodeURIComponent(roundTrip(d).uri)).toBe(decodeURIComponent(uri));
   });
 
-  it('H10 a personal page is hidden raw after the site (no %2F)', () => {
-    const d = scan('https://www.facebook.com/wang.xiaoming');
-    matches(d.uri, new RegExp(`^https://www\\.facebook\\.com/${enc('[網址:')}${C}${enc(']')}$`));
-    expect(roundTrip(d).uri).toBe('https://www.facebook.com/wang.xiaoming');
-    const deep = scan('https://line.me/ti/p/abc123?x=1');
-    expect(roundTrip(deep).uri).toBe('https://line.me/ti/p/abc123?x=1');
-    expect(deep.uri).not.toContain('%2F');
-    expect(scan('https://www.linkedin.com/company/acme').action).toBe('keep'); // pathPrefix /in only
+  it('H10 a network or an IP with its port is hidden whole (rule 16 ip-net); an IP host removes the link', () => {
+    const d = scan('https://school.edu.tw/log?net=192.168.1.0%2F24&at=10.0.0.1%3A8080');
+    matches(d.uri, new RegExp(`\\?net=192\\.168\\.${enc('[IP:')}${C}${enc(']')}&at=10\\.0\\.${enc('[IP:')}${C}${enc(']')}$`));
+    expect(d.hits.map((h) => h.original)).toEqual(['1.0/24', '0.1:8080']);
+    expect(roundTrip(d).uri).toBe('https://school.edu.tw/log?net=192.168.1.0%2F24&at=10.0.0.1%3A8080');
+    expect(scan('http://10.0.0.1:8080/s').action).toBe('strip');
+    expect(scan('https://www.facebook.com/wang.xiaoming').action).toBe('keep'); // no personal-page rule (spec §5.2)
   });
 
   it('H13 broken encoding: hidden whole as 網址, warned, restored byte for byte', () => {
@@ -112,20 +109,22 @@ describe('link targets (spec §5.1)', () => {
 });
 
 describe('bare URLs in text (spec §5.2, §5.3)', () => {
-  const url = BUILTIN_PATTERNS.filter((p) => p.id === 'url').map((p) => ({ ...p, retention: { mode: 'preview' } }));
+  const none = (ids) => BUILTIN_PATTERNS.filter((p) => ids.includes(p.id)).map((p) => ({ ...p, retention: { mode: 'none' } }));
 
-  it('H26 a personal page in TXT: marker written unencoded, restored by the text restorer', () => {
-    const text = '個人頁 https://www.facebook.com/wang.xiaoming。另見 https://school.edu.tw/x';
-    const { redactedText, mapping } = applyRedactions(text, detect(text, url));
-    matches(redactedText, new RegExp(`^個人頁 https://www\\.facebook\\.com/\\[網址:${C}\\]。另見 https://school\\.edu\\.tw/x$`));
+  it('H26 rule 16 in TXT: networks and ports hidden whole, not left as「/24」「:8080」; restored exactly', () => {
+    const text = '主機 http://10.0.0.1:8080/s，網段 192.168.1.0/24，IPv6 2001:db8::/32 與 [2001:db8::1]:443。時間 10:30:00/24 不算';
+    const { redactedText, mapping } = applyRedactions(text, detect(text, none(['ipv4', 'ipv6', 'ip-net'])));
+    matches(redactedText, new RegExp(`^主機 http://\\[IP:${C}\\]/s，網段 \\[IP:${C}\\]，IPv6 \\[IP:${C}\\] 與 \\[IP:${C}\\]。時間 10:30:00/24 不算$`));
+    expect(mapping.map((m) => m.original)).toEqual(['10.0.0.1:8080', '192.168.1.0/24', '2001:db8::/32', '[2001:db8::1]:443']);
     expect(restore(redactedText, mapping).restoredText).toBe(text);
+    expect(detect('版本 1.2.3.4/50、埠 10.0.0.1:70000', none(['ip-net']))).toEqual([]);
   });
 
-  it('the worker finds personal pages with the hosts of the page', async () => {
-    const text = '見 https://m.facebook.com/wang.xiaoming';
-    const { cands, skipped } = await scanInWorker(text, [{ id: 'url' }]);
+  it('the worker runs rule 16 with its validator', async () => {
+    const text = '見 [2001:db8::1]:443 與 10:30:00/24';
+    const { cands, skipped } = await scanInWorker(text, [{ id: 'ip-net' }]);
     expect(skipped).toEqual([]);
-    expect(cands.map((c) => text.slice(c.start, c.end))).toEqual(['https://m.facebook.com/wang.xiaoming']);
+    expect(cands.map((c) => text.slice(c.start, c.end))).toEqual(['[2001:db8::1]:443']);
   });
 
   it('a percent-encoded name in a bare URL is hidden whole and never re-split', async () => {

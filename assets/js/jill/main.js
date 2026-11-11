@@ -6,7 +6,6 @@ import { createPatternsView } from '../upstream/ui/patterns-view.js';
 import { createRestoreView } from '../upstream/ui/restore-view.js';
 import { CATEGORIES } from '../upstream/core/types.js';
 import { setOrgPatterns } from '../upstream/core/pattern-store.js';
-import { setPersonalHosts } from '../upstream/core/patterns.js';
 import { config } from './config.js';
 
 const CREATE = { process: createProcessView, patterns: createPatternsView, restore: createRestoreView };
@@ -17,7 +16,6 @@ for (const c of [...config.orgRules.map((r) => r.category), ...Object.values(con
   if (!CATEGORIES.includes(c)) CATEGORIES.push(c);
 }
 setOrgPatterns(config.orgRules);
-setPersonalHosts(config.urlPersonalHosts);
 setPresets(config.presets);
 
 // What upstream puts on <body> (tooltip, toasts, dialogs, OCR screen, add popup) goes here, inside the CSS scope.

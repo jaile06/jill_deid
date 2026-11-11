@@ -2,7 +2,6 @@
 // A page of its own: the process view keeps its documents in module state.
 import { describe, expect, it } from './runner.js';
 import { CATEGORIES } from '../../assets/js/upstream/core/types.js';
-import { setPersonalHosts } from '../../assets/js/upstream/core/patterns.js';
 import { createProcessView } from '../../assets/js/upstream/ui/process-view.js';
 import { config } from '../../assets/js/jill/config.js';
 
@@ -13,7 +12,6 @@ const until = async (ok, ms = 30000) => {
 };
 // as main.js does
 for (const c of Object.values(config.columnLabels)) if (!CATEGORIES.includes(c)) CATEGORIES.push(c);
-setPersonalHosts(config.urlPersonalHosts);
 const host = document.createElement('div');
 host.id = 'jill-deid-app';
 document.body.append(host);
@@ -153,8 +151,8 @@ describe('upstream functions on the themed page (spec §6.1 上游功能 1–11)
 
   it('6: plain view, and a selection becomes a new item', async () => {
     show('links.md');
-    const count = () => Number(host.querySelector('.sidebar h5').textContent.match(/共 (\d+)/)[1]);
-    await until(() => host.querySelector('.sidebar h5'));
+    const count = () => Number(host.querySelector('.sidebar h4').textContent.match(/共 (\d+)/)[1]);
+    await until(() => host.querySelector('.sidebar h4'));
     const before = count();
     const plain = [...host.querySelectorAll('.preview-head-tools input[type="checkbox"]')][0];
     if (plain) { // a Markdown file has no layout: the preview is plain already
@@ -177,8 +175,8 @@ describe('upstream functions on the themed page (spec §6.1 上游功能 1–11)
   });
 
   it('5, 7: a whole category off and on again; 重新偵測 keeps manual items', async () => {
-    const active = () => Number(host.querySelector('.sidebar h5').textContent.match(/生效 (\d+)/)[1]);
-    const total = () => Number(host.querySelector('.sidebar h5').textContent.match(/共 (\d+)/)[1]);
+    const active = () => Number(host.querySelector('.sidebar h4').textContent.match(/生效 (\d+)/)[1]);
+    const total = () => Number(host.querySelector('.sidebar h4').textContent.match(/共 (\d+)/)[1]);
     const before = active();
     const box = () => [...host.querySelectorAll('.output-table tr')].find((tr) => tr.querySelector('.badge')?.textContent === '姓名').querySelector('input[type="checkbox"]');
     box().click();
@@ -188,7 +186,7 @@ describe('upstream functions on the themed page (spec §6.1 上游功能 1–11)
     const n = total();
     buttonNamed('重新偵測').click();
     await until(() => [...host.querySelectorAll('#jill-deid-portal .toast')].some((t) => t.textContent.includes('重新偵測')) || total() === n, 15000);
-    await until(() => host.querySelector('.sidebar h5') && total() === n);
+    await until(() => host.querySelector('.sidebar h4') && total() === n);
     expect([...host.querySelectorAll('.sidebar .tag')].map((t) => t.textContent)).toContain('手動');
   });
 

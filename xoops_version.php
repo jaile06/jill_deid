@@ -48,19 +48,6 @@ $modversion['templates'] = [
 
 //---偏好設定---//
 $modversion['config'][] = [
-    'name'        => 'url_personal_hosts',
-    'title'       => '_MI_JILLDEID_URL_PERSONAL_HOSTS',
-    'description' => '_MI_JILLDEID_URL_PERSONAL_HOSTS_DESC',
-    'formtype'    => 'textarea',
-    'valuetype'   => 'text',
-    'default'     => implode("\n", [
-        'facebook.com', 'fb.com', 'instagram.com', 'threads.com', 'threads.net',
-        'line.me/ti/p', 'linkedin.com/in', 'drive.google.com', 'docs.google.com',
-        'onedrive.live.com', '1drv.ms', 'dropbox.com',
-    ]),
-];
-
-$modversion['config'][] = [
     'name'        => 'column_labels',
     'title'       => '_MI_JILLDEID_COLUMN_LABELS',
     'description' => '_MI_JILLDEID_COLUMN_LABELS_DESC',

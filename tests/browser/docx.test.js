@@ -1,7 +1,7 @@
 // Phase 3b-3: DOCX link targets and residue (spec §5.5 DOCX, H4–H7, H16; H15 in h15.test.js).
 import { describe, expect, it } from './runner.js';
 import { generateDocx, parseDocx } from '../../assets/js/upstream/formats/docx.js';
-import { BUILTIN_PATTERNS, setPersonalHosts } from '../../assets/js/upstream/core/patterns.js';
+import { BUILTIN_PATTERNS } from '../../assets/js/upstream/core/patterns.js';
 import { CodeBook } from '../../assets/js/upstream/core/codes.js';
 import { resplitItems } from '../../assets/js/upstream/core/detector.js';
 import { detectShort } from '../../assets/js/jill/detect.js';
@@ -177,11 +177,10 @@ describe('DOCX parts and residue (spec §5.5 DOCX 5–8)', () => {
 
 describe('DOCX fixture made by Office, URLs rewritten (not stripped)', () => {
   it('links.docx (tools/make-links-docx.ps1): nothing remains in any form', async () => {
-    setPersonalHosts(['facebook.com']);
     const fixture = new File([await (await fetch('fixtures/links.docx')).blob()], 'links.docx');
     const { zip, r } = await processDocx(fixture);
     expect(r.links.every((l) => l.decision.action !== 'strip')).toBe(true);
-    expect(await leaks(zip, ['A123456789', '小明', 'wang.xm', 'wang.xiaoming', 'chen.ml', '林志明', '測試作者'])).toEqual([]);
+    expect(await leaks(zip, ['A123456789', '小明', 'wang.xm', 'chen.ml', '林志明', '測試作者'])).toEqual([]);
   });
 });
 

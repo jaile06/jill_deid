@@ -1,6 +1,6 @@
 # jill_deid — AI 協作須知
 
-- **唯一事實來源**：`docs/spec.md`（規格書 v3.8）。與 convention 衝突以 spec 為準。
+- **唯一事實來源**：`docs/spec.md`（規格書 v3.9）。與 convention 衝突以 spec 為準。
 - 通用規範：`g:\我的雲端硬碟\note\Templates\開發範本\OpenSpec-XOOPS-convention.md`、`XOOPS-安全開發檢查清單.md`。
 - 一次只做一個 Phase（spec §8），每個 Phase 一個分支；合併前 `./check.ps1` 全過（含 headless Chrome 跑 `tests/browser/`，需本機站台），並跑 `node tools/e2e.mjs`（兩個佈景的實際流程＋HAR＋斷網＋Word／Excel 開檔）。
 - PHP：`E:\my_xoops274\core\php83\php.exe`；lint：`php D:/workspace/02_Tools/xoops-lint/xoops-lint.php .`
@@ -21,7 +21,7 @@
 | 4a 去識別化頁 | 已合併 main（2026-11-10）：超連結處理、`🔗`＋文件連結清單（取消／移除／恢復）、H11 提示、文件屬性開關、項目來源與整欄取消；上游功能 1–11 對照驗收；瀏覽器 94/94＋3/3＋11/11、e2e 兩個佈景 PASS |
 | 4b 偵測規則頁 | 已合併 main（2026-11-10）：機構共用規則分組（locked 不可停用）、「測試網址」框（`explainUri`）；另合併 `fix-preview-notes`（註腳、章節附註、註解分框標示）；瀏覽器 95＋3＋11＋9 全過、e2e 兩個佈景 PASS |
 | 4c 還原頁 | 已合併 main（2026-11-10）：還原頁接上 `restoreDocument`，列出已還原的連結；H12 經介面（Word 範例檔下載後與原檔一致、Markdown 逐位元組）；瀏覽器 95＋3＋11＋9＋3 全過、e2e 兩個佈景 PASS |
-| 4d 整合 | 下一步 |
+| 4d 整合 | 已合併 main（2026-11-11）：範例 `hyperlinks.*`、已知不涵蓋範圍、上游測試移植（369/369）、無障礙（`tools/a11y.mjs`：axe、標題、44×44、Tab 走訪與焦點框，接進 e2e）；spec v3.9 規則 16 改為 `ip-net`、取消個人頁；瀏覽器 95＋3＋11＋9＋3＋369 全過、e2e 兩個佈景 PASS |
 
 ## 本模組特有的鐵則（spec 摘要，細節回 spec 查）
 
@@ -53,4 +53,6 @@
 - （Phase 3b-4）**Excel 存檔的作者取自 Office 帳號**：`UserName` 只影響註解作者，`dc:creator`、`cp:lastModifiedBy` 是登入帳號的真實姓名，設 Last Author 也會在存檔時被蓋掉。`tools/make-links-xlsx.ps1` 存檔後直接改 `core.xml`，並檢查整包不再出現該名稱。
 - （Phase 3b-4）移除 Excel 公式後要一併處理 `calcChain.xml`，否則 Excel 判定檔案損毀；只看 XML 是否合法抓不到，一定要用 `tools/office-open.ps1` 實際開檔。
 - （Phase 4a）**介面測試要拿「實際下載的檔案」驗證**：攔截 `<a download>.click()` 取下載內容，確認畫面上的選擇（例如單一連結取消去識別化）真的反映在輸出檔，不只看畫面文字。
+- （Phase 4d）**檢查工具本身也會發請求**：axe-core 預設 `preload` 會重抓佈景的跨網域樣式表，HAR 判成第三方請求；`axe.run` 一律 `preload: false`。sed 改含 `\]` 的 regex 又吃掉反斜線（同 Phase 2 那條）。
+- （Phase 4d）**headless 的焦點檢查要先 `Emulation.setFocusEmulationEnabled`**：頁面沒有焦點時 `:focus-visible` 永不成立，兩個佈景都會「看起來」一樣。xbootstrap5 的 `reset.css` 有 `* { outline: 0 !important }`，本模組的 `:focus-visible` 要 `!important`；佈景的 `a { transition }` 讓焦點框延遲出現，讀樣式前要等 transition。收合的 `<details>` 內容要用 `checkVisibility()` 判斷，`offsetParent` 會誤判可見。
 - （Phase 4a）e2e 的「水平捲動」要先找是誰撐寬：school2022 的選單本身就超出 1280 寬，與本模組無關；檢查限定在 `#jill-deid-app` 內。

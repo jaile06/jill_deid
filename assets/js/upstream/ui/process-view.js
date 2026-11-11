@@ -682,7 +682,7 @@ function renderFilePanel(root             )              {
     input.value = '';
   });
   panel.append(
-    el('div', { class: 'file-panel-head' }, el('h5', {}, `檔案（${state.docs.length}/${MAX_FILES}）`)),
+    el('div', { class: 'file-panel-head' }, el('h4', {}, `檔案（${state.docs.length}/${MAX_FILES}）`)),
     list,
     state.docs.length < MAX_FILES ? button('＋ 加入檔案', () => input.click(), 'btn btn-small') : el('p', { class: 'muted small' }, `已達 ${MAX_FILES} 個上限`),
     input,
@@ -698,7 +698,7 @@ function renderWorkspace(root             )              {
   const linksHost = el('div', {}); // jill_deid patch (P1-10): 文件連結 (spec §6.1 新增 3)
   const headTools = el('div', { class: 'preview-head-tools' });
   const previewWrap = el('div', { class: 'preview-wrap' },
-    el('div', { class: 'preview-head' }, el('h5', {}, '去識別化預覽'), headTools),
+    el('div', { class: 'preview-head' }, el('h4', {}, '去識別化預覽'), headTools),
     el('p', { class: 'muted small preview-desc' }, `預覽即下載後的樣子${restorable() ? '（編碼以 [類別] 顯示）' : ''}：點標記可取消、圈選文字可新增，滑鼠停留可看原文。${previewHint(d.doc)}`),
     outputHost,
     linksHost,
@@ -1129,7 +1129,7 @@ function renderSidebar(sidebar             , preview             , refresh      
   }
 
   sidebar.append(
-    el('h5', {}, `偵測項目（生效 ${active.length} / 共 ${d.items.length}）`),
+    el('h4', {}, `偵測項目（生效 ${active.length} / 共 ${d.items.length}）`),
     renderColumnBatch(d, refresh),
     d.items.length === 0 ? el('p', { class: 'muted' }, '目前沒有項目。可在預覽中圈選文字新增。') : list,
   );

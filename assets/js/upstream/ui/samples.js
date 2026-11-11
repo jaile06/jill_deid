@@ -18,6 +18,10 @@ export const SAMPLES           = [
   { file: 'scanned.pdf', name: '掃描文件.pdf', format: '掃描 PDF', description: '5 頁影像需辨識，含手寫與表格' },
   { file: 'customers.xlsx', name: '客戶資料.xlsx', format: 'Excel', description: '60 筆客戶，三個工作表' },
   { file: 'meeting-notes.md', name: '專案會議紀錄.md', format: 'Markdown', description: '出席者、決議、待辦' },
+  // jill_deid patch (PATCHES.md P1-14): this module's link samples (spec §6.1 新增 5), made by tools/make-links-*.ps1
+  { file: 'hyperlinks.docx', name: '含連結的文件.docx', format: 'Word', description: '超連結、滑鼠提示、頁首連結、註腳、註解' },
+  { file: 'hyperlinks.xlsx', name: '含連結的名單.xlsx', format: 'Excel', description: '超連結、HYPERLINK 公式、註解' },
+  { file: 'hyperlinks.md', name: '家長通知單.md', format: 'Markdown', description: '各種連結寫法：網址參數、信箱、圖片、內網 IP' },
 ];
 
 export const RESTORE_SAMPLE = {
