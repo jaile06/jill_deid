@@ -21,7 +21,7 @@
 | 4a 去識別化頁 | 已合併 main（2026-11-10）：超連結處理、`🔗`＋文件連結清單（取消／移除／恢復）、H11 提示、文件屬性開關、項目來源與整欄取消；上游功能 1–11 對照驗收；瀏覽器 94/94＋3/3＋11/11、e2e 兩個佈景 PASS |
 | 4b 偵測規則頁 | 已合併 main（2026-11-10）：機構共用規則分組（locked 不可停用）、「測試網址」框（`explainUri`）；另合併 `fix-preview-notes`（註腳、章節附註、註解分框標示）；瀏覽器 95＋3＋11＋9 全過、e2e 兩個佈景 PASS |
 | 4c 還原頁 | 已合併 main（2026-11-10）：還原頁接上 `restoreDocument`，列出已還原的連結；H12 經介面（Word 範例檔下載後與原檔一致、Markdown 逐位元組）；瀏覽器 95＋3＋11＋9＋3 全過、e2e 兩個佈景 PASS |
-| 5 驗收 | `phase-5` 進行中（2026-11-11）：§9 自動可驗者已勾（`eall_test`、`admin_guard_test`、斷網還原、子目錄／不同網域、純圖示按鈕 P1-16）；待手動：DevTools HAR、xswatch5（站台未允許）、管理員 GET／缺 token、鍵盤開檔案選擇視窗 |
+| 5 驗收 | `phase-5` 進行中（2026-11-11）：§9 除一項外全勾（`eall_test`、`admin_guard_test` 含管理員 session、斷網還原、子目錄／不同網域、純圖示按鈕 P1-16、xswatch5 e2e PASS、HAR 以 e2e 代替）；待手動：鍵盤開啟檔案選擇視窗 |
 | 4d 整合 | 已合併 main（2026-11-11）：範例 `hyperlinks.*`、已知不涵蓋範圍、上游測試移植（369/369）、無障礙（`tools/a11y.mjs`：axe、標題、44×44、Tab 走訪與焦點框，接進 e2e）；spec v3.9 規則 16 改為 `ip-net`、取消個人頁；瀏覽器 95＋3＋11＋9＋3＋369 全過、e2e 兩個佈景 PASS |
 
 ## 本模組特有的鐵則（spec 摘要，細節回 spec 查）
@@ -57,4 +57,6 @@
 - （Phase 4d）**檢查工具本身也會發請求**：axe-core 預設 `preload` 會重抓佈景的跨網域樣式表，HAR 判成第三方請求；`axe.run` 一律 `preload: false`。sed 改含 `\]` 的 regex 又吃掉反斜線（同 Phase 2 那條）。
 - （Phase 4d）**headless 的焦點檢查要先 `Emulation.setFocusEmulationEnabled`**：頁面沒有焦點時 `:focus-visible` 永不成立，兩個佈景都會「看起來」一樣。xbootstrap5 的 `reset.css` 有 `* { outline: 0 !important }`，本模組的 `:focus-visible` 要 `!important`；佈景的 `a { transition }` 讓焦點框延遲出現，讀樣式前要等 transition。收合的 `<details>` 內容要用 `checkVisibility()` 判斷，`offsetParent` 會誤判可見。
 - （Phase 5）**除錯模式關閉時 XOOPS 會 `error_reporting(0)` 並換上 `XoopsErrorHandler`**：網頁、Apache 記錄都看不到 PHP 訊息，在 `mainfile.php` 之前設的處理器也會被蓋掉（`admin_db_test` 的「no PHP warnings」從 Phase 2 起都是空檢查）。要驗 E_ALL 一律載入 XOOPS 後再設，且要有對照組（xbootstrap5 的 TadTools 警告）證明抓得到；處理器要尊重 `@`（`error_reporting() & $no`）。`release_date` 要寫 `2026/11/11`，`-` 會讓 moduleadmin 的關於頁出警告。
+- （Phase 5）**改站台設定做測試，原值要另外記下、用另一支程式寫回並重新查詢確認**：暫存原值的檔案曾存成改過的值，還原寫回錯的值（已手動寫回）。XOOPS session 綁定來源 IP，CLI 建的 session 要連 `127.0.0.1`（`localhost` 在 Windows 走 `::1`）；清理 session 時只刪自己的 `sess_id`，不要用條件批次刪，以免刪到使用者的登入。
+- （Phase 5）每個佈景都可能把顏色蓋進模組：xswatch5 把 h1–h6 設成淺藍，對比 2.6:1。新佈景一律跑 e2e 的 a11y。
 - （Phase 4a）e2e 的「水平捲動」要先找是誰撐寬：school2022 的選單本身就超出 1280 寬，與本模組無關；檢查限定在 `#jill-deid-app` 內。
