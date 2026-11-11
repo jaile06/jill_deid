@@ -19,3 +19,23 @@
 :is(#jill-deid-app, #jill-deid-portal) .url-test-input { flex: 1 1 18rem; min-width: 0; }
 :is(#jill-deid-app, #jill-deid-portal) .url-test-table td { overflow-wrap: anywhere; vertical-align: top; }
 :is(#jill-deid-app, #jill-deid-portal) .url-test-output { overflow-wrap: anywhere; }
+/* 已知不涵蓋範圍 in the template (spec §6.1 新增 6, §10) */
+:is(#jill-deid-app, #jill-deid-portal) .known-limits { margin: .5rem 0 1rem; padding: .5rem .8rem; border: 1px solid #e0b252; border-radius: 6px; background: #fff8e6; color: #3d2e00; font-size: .9em; }
+:is(#jill-deid-app, #jill-deid-portal) .known-limits summary { cursor: pointer; font-weight: 600; }
+:is(#jill-deid-app, #jill-deid-portal) .known-limits ul { margin: .5rem 0 0; padding-left: 1.2rem; }
+/* Accessibility (spec §9.4). Text contrast ≥ 4.5:1 on the tinted backgrounds (#eef3ff, the IBAN mark). */
+:is(#jill-deid-app, #jill-deid-portal) { --muted: #5b6271; --primary: #2459d1; }
+:is(#jill-deid-app, #jill-deid-portal) .badge-IBAN { color: #1f2937; }
+/* Targets ≥ 44×44 px; a checkbox or radio counts with its label. The 🔗 in running text is exempt (WCAG 2.5.8 inline). */
+:is(#jill-deid-app, #jill-deid-portal) :is(.tab, .btn, .menu-item, .file-item-remove, .select, .input, summary, .rule-toggle, [tabindex="0"]) { min-height: 44px; box-sizing: border-box; }
+:is(#jill-deid-app, #jill-deid-portal) :is(.btn, .file-item-remove, .rule-toggle) { min-width: 44px; }
+:is(#jill-deid-app, #jill-deid-portal) label:has(> input[type=checkbox], > input[type=radio]) { min-height: 44px; display: inline-flex; align-items: center; }
+:is(#jill-deid-app, #jill-deid-portal) :is(.btn, summary.btn, [tabindex="0"]) { display: inline-flex; align-items: center; }
+:is(#jill-deid-app, #jill-deid-portal) .known-limits summary { padding-block: 12px; }
+/* P1-15: 全部啟用 sits after <summary>, laid over the head row */
+:is(#jill-deid-app, #jill-deid-portal) .rule-group { position: relative; }
+:is(#jill-deid-app, #jill-deid-portal) .rule-group > .rule-group-head { padding-right: 8rem; }
+:is(#jill-deid-app, #jill-deid-portal) .rule-group > .group-toggle-label { position: absolute; top: 0; right: .9rem; }
+/* workspace headings are h4 (P1-15); keep upstream's h5 look */
+:is(#jill-deid-app, #jill-deid-portal) :is(.file-panel-head, .preview-head, .sidebar) > h4 { font-size: 1rem; }
+:is(#jill-deid-app, #jill-deid-portal) .preview-head > h4 { margin: 0; }

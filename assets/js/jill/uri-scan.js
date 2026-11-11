@@ -121,15 +121,8 @@ export function scanUri(uri, patterns, book, opts = {}) {
   const marker = (h) => encodeURIComponent(buildMarker(h.category, h.code));
   const edits = [];
 
-  // A personal page (rule 16) is hidden as one raw piece: a path keeps its '/' (spec §5.3).
-  const pages = resolveOverlaps(active.filter((p) => p.category === URL_CATEGORY).flatMap((p) => scanPattern(uri, p)));
-  for (const x of pages) {
-    const h = hide(x.category, uri.slice(x.start, x.end), retentionOf(x));
-    edits.push({ start: x.start, end: x.end, replacement: (h.prefix ?? '') + marker(h) + (h.suffix ?? '') });
-  }
-  const others = active.filter((p) => p.category !== URL_CATEGORY);
-  for (const c of pages.length ? [] : components(uri)) {
-    const { value, cands } = scanComponent(uri, c, others);
+  for (const c of components(uri)) {
+    const { value, cands } = scanComponent(uri, c, active);
     if (value === null) { // fail closed (spec §5.1): the whole value, raw
       warnings.push('undecodable');
       if (c.kind === 'host') host = true;
@@ -159,20 +152,15 @@ export function scanUri(uri, patterns, book, opts = {}) {
 }
 
 /**
- * What scanUri sees in `uri`, for the 測試網址 box (spec §6.1 新增 4): the personal-page hits, else each component
- * with its raw and decoded value (null: undecodable) and the hits in it. Same rules and same code path as scanUri.
- * @returns {{ page: { category: string, text: string }[], parts: { kind: string, raw: string, value: string|null, hits: { category: string, text: string }[] }[] }}
+ * What scanUri sees in `uri`, for the 測試網址 box (spec §6.1 新增 4): each component with its raw and decoded value
+ * (null: undecodable) and the hits in it. Same rules and same code path as scanUri.
+ * @returns {{ parts: { kind: string, raw: string, value: string|null, hits: { category: string, text: string }[] }[] }}
  */
 export function explainUri(uri, patterns) {
   const active = patterns.filter((p) => p.enabled !== false && p.applyToUrl !== false);
-  const page = resolveOverlaps(active.filter((p) => p.category === URL_CATEGORY).flatMap((p) => scanPattern(uri, p)))
-    .map((x) => ({ category: x.category, text: uri.slice(x.start, x.end) }));
-  if (page.length) return { page, parts: [] };
-  const others = active.filter((p) => p.category !== URL_CATEGORY);
   return {
-    page,
     parts: components(uri).map((c) => {
-      const { value, cands } = scanComponent(uri, c, others);
+      const { value, cands } = scanComponent(uri, c, active);
       // raw shows a query value with its key (sid=112001); value and hits are the value's own
       const raw = uri.slice(c.ctxStart, c.end).replace(/^[?&]/, '');
       return { kind: c.kind, raw, value, hits: (cands ?? []).map((x) => ({ category: x.category, text: value.slice(x.start, x.end) })) };
@@ -218,7 +206,7 @@ function encodedParts(text) {
  * candidate is that whole raw part, always hidden whole (`fixed`), so offsets and bytes restore exactly.
  */
 export function encodedTextCandidates(text, p) {
-  if (p.category === URL_CATEGORY || p.applyToUrl === false || !text.includes('%')) return [];
+  if (p.applyToUrl === false || !text.includes('%')) return [];
   return encodedParts(text)
     .filter(({ url, c }) => scanComponent(url, c, [p]).cands?.length)
     .map(({ c, at }) => ({ category: p.category, start: at + c.start, end: at + c.end, fixed: true }));

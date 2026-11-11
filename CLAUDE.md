@@ -1,6 +1,6 @@
 # jill_deid — AI 協作須知
 
-- **唯一事實來源**：`docs/spec.md`（規格書 v3.8）。與 convention 衝突以 spec 為準。
+- **唯一事實來源**：`docs/spec.md`（規格書 v3.9）。與 convention 衝突以 spec 為準。
 - 通用規範：`g:\我的雲端硬碟\note\Templates\開發範本\OpenSpec-XOOPS-convention.md`、`XOOPS-安全開發檢查清單.md`。
 - 一次只做一個 Phase（spec §8），每個 Phase 一個分支；合併前 `./check.ps1` 全過（含 headless Chrome 跑 `tests/browser/`，需本機站台），並跑 `node tools/e2e.mjs`（兩個佈景的實際流程＋HAR＋斷網＋Word／Excel 開檔）。
 - PHP：`E:\my_xoops274\core\php83\php.exe`；lint：`php D:/workspace/02_Tools/xoops-lint/xoops-lint.php .`
@@ -53,4 +53,5 @@
 - （Phase 3b-4）**Excel 存檔的作者取自 Office 帳號**：`UserName` 只影響註解作者，`dc:creator`、`cp:lastModifiedBy` 是登入帳號的真實姓名，設 Last Author 也會在存檔時被蓋掉。`tools/make-links-xlsx.ps1` 存檔後直接改 `core.xml`，並檢查整包不再出現該名稱。
 - （Phase 3b-4）移除 Excel 公式後要一併處理 `calcChain.xml`，否則 Excel 判定檔案損毀；只看 XML 是否合法抓不到，一定要用 `tools/office-open.ps1` 實際開檔。
 - （Phase 4a）**介面測試要拿「實際下載的檔案」驗證**：攔截 `<a download>.click()` 取下載內容，確認畫面上的選擇（例如單一連結取消去識別化）真的反映在輸出檔，不只看畫面文字。
+- （Phase 4d）**檢查工具本身也會發請求**：axe-core 預設 `preload` 會重抓佈景的跨網域樣式表，HAR 判成第三方請求；`axe.run` 一律 `preload: false`。sed 改含 `\]` 的 regex 又吃掉反斜線（同 Phase 2 那條）。
 - （Phase 4a）e2e 的「水平捲動」要先找是誰撐寬：school2022 的選單本身就超出 1280 寬，與本模組無關；檢查限定在 `#jill-deid-app` 內。

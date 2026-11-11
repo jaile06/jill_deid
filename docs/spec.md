@@ -1,8 +1,8 @@
 ---
 title: "XOOPS 模組開發規格書：文件去識別化工具（jill_deid）"
-version: 3.8
+version: 3.9
 created: 2026-11-06
-updated: 2026-11-10
+updated: 2026-11-11
 upstream: "https://github.com/dean9703111/data-deidentification @ 1f7b9298f94a9728cf6d181f84cfcce48c39d968（2026-10-16，MIT）"
 baseline: "E:\\my_xoops274\\www（XOOPS 2.7.4、Smarty 4.5.8、TadTools 4.0.8-Stable、PHP 8.3）"
 tags:
@@ -36,7 +36,7 @@ related_entities:
 4. 上游程式碼取 frontmatter 所列 commit。§A 是已對照原始碼的事實，與實際程式不符時停下來回報。
 5. 一次只做一個 Phase（§8），通過該 Phase 驗收才進下一個。
 6. 標 `【待確認】` 的值先照草案實作並集中放置，不要因此停工；其餘未定義的行為一律提問，不要自行決定。
-7. **已定案，不要重新提議**（2026-11-06 使用者確認；2026-11-10 修訂前台）：前台走一般 XOOPS 流程、套佈景，不做獨立頁、不送 CSP（§6.1）；**前台直接沿用上游介面 `ui/`、`styles.css` 與範例檔，只由轉換工具做佈景相容調整；不用 `main.ts`**（§4、§6.1，v3.7）；`mask_whole_url` 延後；基準為 XOOPS 2.7.4、PHP 8.3，不支援 2.5.11；資料表用 MyISAM；校務資料涵蓋學號、座號、員編、文號、身分證號、姓名、EMAIL（§6.4）；骨架由 `tad_xmod_maker` 產生；前台為 PHP＋原生 JS，開發與上線都不用 Node 建置（§4）。**v3.6（2026-11-10）使用者核准**：上游 P0 修補（DOCX offset、XLSX 數值格、`resolveOverlaps` 效能，§4）；偵測整段在單一 module worker（§3.3）；vendor 改由用到的模組自行 import（§4）；欄首標籤偵測（§6.5）；規則包修正（§6.4）。**v3.7（2026-11-10）使用者決定**：上游介面功能齊全（README「操作流程」步驟 1–7），改回沿用上游 `ui/` 與範例檔，取代 v3.5 的「介面自寫」；本模組新增功能以修補方式加在上游 `ui/`；xbootstrap5 下 TadTools 的警告不修（§9.1）。
+7. **已定案，不要重新提議**（2026-11-06 使用者確認；2026-11-10 修訂前台）：前台走一般 XOOPS 流程、套佈景，不做獨立頁、不送 CSP（§6.1）；**前台直接沿用上游介面 `ui/`、`styles.css` 與範例檔，只由轉換工具做佈景相容調整；不用 `main.ts`**（§4、§6.1，v3.7）；`mask_whole_url` 延後；基準為 XOOPS 2.7.4、PHP 8.3，不支援 2.5.11；資料表用 MyISAM；校務資料涵蓋學號、座號、員編、文號、身分證號、姓名、EMAIL（§6.4）；骨架由 `tad_xmod_maker` 產生；前台為 PHP＋原生 JS，開發與上線都不用 Node 建置（§4）。**v3.6（2026-11-10）使用者核准**：上游 P0 修補（DOCX offset、XLSX 數值格、`resolveOverlaps` 效能，§4）；偵測整段在單一 module worker（§3.3）；vendor 改由用到的模組自行 import（§4）；欄首標籤偵測（§6.5）；規則包修正（§6.4）。**v3.7（2026-11-10）使用者決定**：上游介面功能齊全（README「操作流程」步驟 1–7），改回沿用上游 `ui/` 與範例檔，取代 v3.5 的「介面自寫」；本模組新增功能以修補方式加在上游 `ui/`；xbootstrap5 下 TadTools 的警告不修（§9.1）。**v3.9（2026-11-11）使用者決定**：內建規則 16 由「個人頁網址」改為「IP 網段與連接埠」（`ip-net`，§5.2），個人頁整條遮蔽與模組設定 `url_personal_hosts` 取消。
 8. §A 的路徑與行號指上游 TypeScript 原始碼；`core/`、`formats/`、`ui/` 對應本模組 `assets/js/upstream/` 下的同名 `.js`；`styles.css` 對應轉換工具產生的 `assets/css/upstream.css`。
 
 ---
@@ -160,7 +160,7 @@ modules/jill_deid/
 
 命名：`op` 為 `[entity]_[動作]`；常數 `_MI_JILLDEID_*`、`_MD_JILLDEID_*`、`_AM_JILLDEID_*`。
 
-模組設定（`$modversion['config']`）：`url_personal_hosts`（textarea，一行一筆，預設值見 §5.2）；`column_labels`（textarea，一行一筆 `標籤=類別`，預設值見 §6.5）。其餘上限沿用上游常數，不開放設定。
+模組設定（`$modversion['config']`）：`column_labels`（textarea，一行一筆 `標籤=類別`，預設值見 §6.5）。其餘上限沿用上游常數，不開放設定。
 
 ---
 
@@ -378,12 +378,11 @@ function restoreUri(uri: string, mapping: MappingEntry[]): { uri: string; missin
 - 只掃啟用且 `applyToUrl !== false` 的規則，內建規則皆為 `true`。
 - **解碼失敗（`URIError`，例如 Big5 的 `%A4%FD`）**：校務舊系統常見，無法判斷內容。整個組件值視為命中，以類別 `網址` 全遮蔽並於 UI 警示，不得放行（fail closed）。
 
-### 5.2 內建規則 `url`（第 16 條）
+### 5.2 內建規則 `ip-net`（第 16 條，v3.9）
 
-- `id:'url'`、類別 `網址`、`group:'intl'`、`preview` 時保留來源（H10）。
-- 比對 `https?://…`、`www.…`；以 `validate` 比對個人頁清單（`Config.urlPersonalHosts`），**只有命中清單才整條成為候選**。清單外的網址只做 §5.1 掃描。
-- 清單項目格式 `domain[/pathPrefix]`，domain 以尾端比對（`www.`、`m.` 等子網域皆算），pathPrefix 以路徑開頭比對。
-- 預設值：`facebook.com`、`fb.com`、`instagram.com`、`threads.com`、`threads.net`、`line.me/ti/p`、`linkedin.com/in`、`drive.google.com`、`docs.google.com`、`onedrive.live.com`、`1drv.ms`、`dropbox.com`。
+- `id:'ip-net'`、類別 `IP`、`group:'intl'`；與 `ipv4`、`ipv6` 同類別，重疊時較長者勝，整段成為一個項目（H10、H26）。
+- 比對：IPv4 網段 `192.168.1.0/24`（前綴 0–32）、IPv4 帶連接埠 `10.0.0.1:8080`（1–65535）、IPv6 網段 `2001:db8::/32`（0–128）、IPv6 帶連接埠 `[2001:db8::1]:443`（須以 `[ ]` 包住）。IPv6 形式以 `validate` 經瀏覽器網址解析驗證，排除 `10:30:00/24` 之類的時間。
+- v3.9 起不再有個人頁整條遮蔽：社群網站等個人頁網址只做 §5.1 組件掃描，路徑中的帳號名稱（如 `facebook.com/wang.xiaoming`）不會被偵測。類別 `網址` 只用於解碼失敗的整段遮蔽。
 
 ### 5.3 標記寫法與還原（`docs/marker-in-uri.md`，隨 Phase 3b 建立）
 
@@ -710,7 +709,6 @@ EMAIL=電子郵件
       "markerStyle": "code", "hyperlinkMode": "mask_pii_in_url",
       "custom": {}, "isDefault": true }
   ],
-  "urlPersonalHosts": ["facebook.com", "line.me/ti/p"],
   "columnLabels": { "姓名": "姓名", "學號": "學號", "座號": "座號" },
   "i18n": { "tab.deid": "去識別化", "tab.rules": "偵測規則", "tab.restore": "還原" }
 }
@@ -731,7 +729,7 @@ EMAIL=電子郵件
 | 1b 前端驗證 | §4 轉換（`core/`、`formats/`、`ui/`，vendor 改 side-effect import，佈景相容調整）與第三方檔案；§4 標 P0 的三項修補；`tests/browser/` 最小 runner、`patches.test.js`、`ui.test.js`；上游介面掛載於佈景內，確認五種格式與 OCR；以 H15 確認上游 DOCX 殘留 | H20、H21、H25 與 `ui.test.js` 通過；不通過就停下回報，不進下一個 Phase |
 | 2 後台 | Rule、Preset、Config（含 `columnLabels`）、admin 樣板、規則包、`tests/rule_validate_test.php` | §9.3 |
 | 3a 前端基礎 | 單一 module worker（§3.3，修補 `ui/process-view.js` 改 async）、機構規則併入偵測、情境下拉與策略對照（§3.4、§6.1 新增 1，由 4a 提前）、`columns.js`（§6.5）、逾時下載確認 | H22–H24、Worker 與主執行緒結果一致、看門狗、`presets.html`、e2e 名冊 12 筆全過 |
-| 3b-1 URI 核心 | `uri-scan.js`、`url` 規則、還原 regex、合約文件 | H1–H3、H10、H13、H17–H19、H26 |
+| 3b-1 URI 核心 | `uri-scan.js`、第 16 條規則（v3.9 改為 `ip-net`）、還原 regex、合約文件 | H1–H3、H10、H13、H17–H19、H26 |
 | 3b-2 Markdown | `links/markdown.js` | H9 |
 | 3b-3 DOCX | rels、欄位碼、Fallback／del、docProps | H4–H7、H15、H16 |
 | 3b-4 XLSX | hyperlinks、公式 | H8 |
@@ -783,9 +781,9 @@ EMAIL=電子郵件
 | H7 | 兩個 `<w:hyperlink>` 共用 rId，僅一個取消 | 產生新 rId，兩者各自正確 |
 | H8 | XLSX `HYPERLINK("mailto:…","王小明")` | `<f>`、`<v>` 皆無原值，`<f>` 保留 |
 | H9 | `[王小明](https://example.com/u?id=A123456789 "王小明")` 與 `[1]: …` | text、url、title、reference 全部去識別化，且每處只替換一次 |
-| H10 | 連結目標（URI 位置）`https://www.facebook.com/wang.xiaoming` | `https://www.facebook.com/<編碼的[網址:x]>` |
+| H10 | 連結目標（URI 位置）`https://school.edu.tw/log?net=192.168.1.0%2F24&at=10.0.0.1%3A8080`；主機為 IP 的 `http://10.0.0.1:8080/s`（v3.9） | 網段、連接埠整段成為一個 `IP` 項目（`net=192.168.<編碼的[IP:x]>`），不留下 `/24`、`:8080`；主機為 IP 時移除連結 |
 | H11 | `marker=label` | 含個資連結自動 strip，UI 提示 |
-| H12 | H1–H10 去識別化＋CSV 還原 | 顯示文字逐字一致；URI 依 §5.3 一致；H10 的路徑不得出現 `%2F` 類誤編碼 |
+| H12 | H1–H10 去識別化＋CSV 還原 | 顯示文字逐字一致；URI 依 §5.3 一致 |
 | H13 | 損壞編碼 `%E7%8E` | 不拋例外；整個值以 `網址` 全遮蔽並警示；還原後回到原字串 |
 | H14 | PDF `/Link` 含身分證 | `.deid.pdf` 以 `qpdf --qdf` 展開後無原值、無 `/URI` |
 | H15 | `tests/browser/fixtures/h15.docx`（`tools/make-h15.ps1` 以 Word 產生）：文字方塊（`mc:Fallback`）、追蹤修訂刪除內容、虛構作者 `測試作者` | 解壓後全檔無原值、無作者（含 `people.xml`）；Word 可正常開啟。Phase 1b 已記錄上游殘留（`h15.test.js`），3b-3 改為期待零殘留 |
@@ -799,7 +797,7 @@ EMAIL=電子郵件
 | H23 | DOCX 表格名冊，同 H22 | 同 H22 |
 | H24 | 直式表單：A 欄上下為 `姓名`、`地址`、`電話`，B 欄為值 | §6.5 不產生候選（交給 §6.4 與內建規則） |
 | H25 | `resolveOverlaps` 新舊版對 5,000 筆隨機重疊候選 | 結果完全相同；8 萬筆不重疊候選 < 100 ms |
-| H26 | 文字層裸網址 `https://www.facebook.com/wang.xiaoming`（TXT） | 輸出 `https://www.facebook.com/[網址:x]`，標記不編碼（§5.3） |
+| H26 | 文字層（TXT）`http://10.0.0.1:8080/s`、`192.168.1.0/24`、`2001:db8::/32`、`[2001:db8::1]:443`、時間 `10:30:00/24`（v3.9） | 前四者各為一個 `[IP:x]`，標記不編碼（§5.3）；時間不命中；還原逐字一致 |
 
 `tests/browser/leak-check.js`（MUST）：讀 zip 內**所有文字型項目**，含 `*.rels`，不只 `.xml`；對每個原值檢查原文、`encodeURIComponent`（大小寫 hex）、XML escape、HTML entity 皆不存在。
 
@@ -836,7 +834,7 @@ Fixture 優先沿用上游 `tests/helpers/docx-builder.ts`、`xlsx-builder.ts` �
 **已知殘留（MUST 在 UI 與說明告知，不得宣稱完全無殘留）**：
 
 - Excel：以數值儲存、又不在 §6.5 標籤欄內的電話（前導 0 已遺失，規則比不到）；公式（含 `HYPERLINK` 以外）及其快取值；工作表名稱；定義名稱。
-- URI：雙重編碼（`%25E7…`）、Base64、自訂編碼的參數值。
+- URI：雙重編碼（`%25E7…`）、Base64、自訂編碼的參數值；個人頁網址路徑中的帳號名稱（v3.9，§5.2）。
 - 文件內嵌圖片裡的文字（PDF 掃描檔由 OCR 重建者除外）。
 - **名冊（v3.6 改由 §6.5 處理）**：欄首標籤偵測不涵蓋合併儲存格造成的欄位錯位、標題跨兩列、沒有標題列的名冊；UI MUST 提醒使用者人工檢查這類名冊。
 - **姓名**：內建偵測靠姓氏表與前後文，表外姓氏不命中（已確認武、史、熊、章、尹、崔、賀、俞、靳不在表內）；只有在 §6.5 標籤欄內才補得到。UI MUST 提醒人工檢查，不得宣稱可全部抓到。

@@ -104,10 +104,6 @@ export function standardSplit(category          , value        )        {
       return { head: value.match(/^(?:\d{1,3}\.){2}|^(?:[0-9a-f]{0,4}:){2}/i)?.[0].length ?? 0, tail: 0 };
     case '生日':
       return birthYearSplit(value);
-    case '網址': { // jill_deid patch (PATCHES.md P1-5): keep the site, hide the page (spec §5.2, H10)
-      const site = value.match(/^(?:[a-z][a-z\d+.-]*:\/\/)?[^/?#]*\//i)?.[0];
-      return site ? { head: site.length, tail: 0 } : NONE;
-    }
     default:
       return { head: 1, tail: 0 };
   }

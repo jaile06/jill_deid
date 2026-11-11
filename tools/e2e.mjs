@@ -10,6 +10,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { checkA11y } from './a11y.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const site = process.env.JILL_DEID_SITE ?? 'http://localhost';
@@ -22,7 +23,7 @@ const ROSTER = join(root, 'tests', 'browser', 'fixtures', 'roster.xlsx');
 // links.docx / links.xlsx: made in Word / Excel by tools/make-links-{docx,xlsx}.ps1 (hyperlinks, ScreenTips, HYPERLINK
 // formula, header link, footnote, comments, author)
 const LINKS = ['links.md', 'links.docx', 'links.xlsx'].map((n) => join(root, 'tests', 'browser', 'fixtures', n));
-const LINK_LEAKS = ['A123456789', '%E5%B0%8F%E6%98%8E', '小明', 'wang.xm', 'wang.xiaoming', 'chen.ml', '林志明', '測試作者'];
+const LINK_LEAKS = ['A123456789', '%E5%B0%8F%E6%98%8E', '小明', 'wang.xm', 'chen.ml', '林志明', '測試作者'];
 const TAR = 'C:/Windows/System32/tar.exe'; // Git Bash's tar reads C: as a remote host
 const walkFiles = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walkFiles(join(d, e.name)) : [join(d, e.name)]));
 const FIRST = [...samples(['contract.docx', 'quotation.pdf', 'scanned.pdf', 'customers.xlsx', 'meeting-notes.md', 'support-email.txt']), ROSTER, ...LINKS];
@@ -140,6 +141,7 @@ async function runTheme(theme) {
     await chooseFiles(FIRST);
     await waitFor(`${fileCount} === ${FIRST.length} && ${idle}`, 300000, 'the first batch (OCR included)');
     const files = await evaluate(`[...document.querySelectorAll('#jill-deid-app .file-item')].map((li) => li.textContent.replace(/\\s+/g, ' ').trim())`);
+    const a11y = await checkA11y(evaluate); // spec §9.4, every tab with the workspace filled
 
     await evaluate(`[...document.querySelectorAll('#jill-deid-app button')].find((b) => b.textContent.startsWith('打包下載全部')).click()`);
     for (let i = 0; i < 40 && !readdirSync(join(dir, 'downloads')).some((f) => f.endsWith('.zip')); i++) await sleep(500);
@@ -198,12 +200,14 @@ async function runTheme(theme) {
 
     ws.close();
     const rosterOk = files.some((f) => f.startsWith('roster.xlsx') && f.includes('12 / 12'));
-    const ok = rosterOk && linksOk && shownTheme === theme && !translate && files.length === FIRST.length && !!zip && offlineOk && harOk && problems.length === 0;
+    const ok = a11y.length === 0 && rosterOk && linksOk && shownTheme === theme && !translate && files.length === FIRST.length && !!zip && offlineOk && harOk && problems.length === 0;
     console.log([
       `== ${theme}: ${ok ? 'PASS' : 'FAIL'}`,
       `theme in page: ${shownTheme}; translate widget: ${translate ? 'PRESENT' : 'none'}`,
       ...files.map((f) => `  ${f}`),
       `roster column detection: ${rosterOk ? 'ok' : 'FAILED'}`,
+      `accessibility (spec §9.4): ${a11y.length ? 'FAILED' : 'ok'}`,
+      ...a11y.map((p) => `  a11y: ${p}`),
       `link fixtures (md, docx, xlsx): ${linksOk ? 'ok' : `FAILED ${linkLeaks.join(', ') || 'output missing or Office failed'}`}`,
       ...wordReport.split(/\r?\n/).map((l) => `  office: ${l.trim()}`),
       `zip: ${zip ? `${zip} (${statSync(join(dir, 'downloads', zip)).size} bytes)` : 'MISSING'}`,

@@ -4,33 +4,20 @@ import { ibanLength, isBirthDate, isCardNumber, isIpv6, isSsn, phoneLength } fro
 
 const CJK = '\\u4e00-\\u9fa5';
 
-// jill_deid patch (PATCHES.md P1-5): personal-page URLs (spec §5.2).
+// jill_deid patch (PATCHES.md P1-5): links (spec §5.1). 網址 is the category of an undecodable URI part (fail closed).
 export const URL_CATEGORY = '網址';
 /** A bare URL in text: URI characters only (RFC 3986), as Chinese prose often follows with no space. */
 export const URL_REGEX = "(?:https?://|www\\.)[\\w\\-.~:/?#\\[\\]@!$&'()*+,;=%]+";
 /** Trailing punctuation belongs to the sentence, not the URL. */
 export const trimUrl = (url) => url.replace(/[.,;:!?')\]]+$/, '');
-let personalHosts = [];
-let hostList = [];
-/** Lines of Config.urlPersonalHosts: domain[/pathPrefix]; the domain matches by suffix (www., m. …). */
-export function setPersonalHosts(list) {
-  hostList = [...list];
-  personalHosts = list.map((s) => s.trim().toLowerCase().replace(/^https?:\/\//, '')).filter(Boolean).map((t) => {
-    const i = t.indexOf('/');
-    return i < 0 ? { domain: t, prefix: '' } : { domain: t.slice(0, i), prefix: t.slice(i).replace(/\/+$/, '') };
-  });
-}
-export const getPersonalHosts = () => hostList;
-/** Validator of the url rule: the URL's length without trailing punctuation when it is on the list, else false. */
-export function personalUrlLength(url) {
-  const u = trimUrl(url);
-  const m = u.match(/^(?:https?:\/\/)?([^/?#:]+)(?::\d+)?([^?#]*)/i);
-  if (!m) return false;
-  const host = m[1].toLowerCase();
-  const path = m[2];
-  const on = personalHosts.some((h) => (host === h.domain || host.endsWith(`.${h.domain}`))
-    && (!h.prefix || path === h.prefix || path.startsWith(`${h.prefix}/`)));
-  return on ? u.length : false;
+// Rule 16 (ip-net, spec §5.2)
+const IPV4 = '(?:(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)';
+const IPV6 = '(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}';
+const PORT = '(?:6553[0-5]|655[0-2]\\d|65[0-4]\\d{2}|6[0-4]\\d{3}|[1-5]\\d{4}|[1-9]\\d{0,3})';
+/** An IPv6 form must parse as an address (rules out times such as 10:30:00/24). */
+function ipNetValid(m) {
+  if (/^\d{1,3}(?:\.\d{1,3}){3}[/:]/.test(m)) return true;
+  return isIpv6(m.startsWith('[') ? m.slice(1, m.indexOf(']')) : m.slice(0, m.lastIndexOf('/')));
 }
 
 export const CITIES =
@@ -312,18 +299,20 @@ export const BUILTIN_PATTERNS            = [
     enabled: true,
     validate: isBirthDate,
   },
-  // jill_deid patch (PATCHES.md P1-5): built-in rule 16 (spec §5.2). Only URLs on the module's personal-page list
-  // match as a whole; other links are checked part by part (jill/uri-scan.js).
+  // jill_deid patch (PATCHES.md P1-5): built-in rule 16 (spec §5.2): an IP with its network prefix or port, hidden
+  // whole (the ipv4 / ipv6 rules alone leave「/24」「:8080」behind; the longer match wins).
   {
-    id: 'url',
-    name: '個人頁網址',
+    id: 'ip-net',
+    name: 'IP 網段與連接埠',
     group: 'intl',
-    note: '只有模組設定「個人頁網址清單」上的網址整條命中（例如 facebook.com）；其他網址只檢查其中的個資',
-    category: URL_CATEGORY,
+    note: '網段（CIDR）與帶連接埠的 IP 整段命中；IPv6 帶連接埠時須以 [ ] 包住',
+    category: 'IP',
     source: 'builtin',
-    regex: URL_REGEX,
-    example: 'https://www.facebook.com/wang.xiaoming',
+    regex: `(?<![\\d.])${IPV4}(?:/(?:3[0-2]|[12]?\\d)|:${PORT})(?![\\d.])`
+      + `|(?<![\\w:.\\[])${IPV6}/(?:12[0-8]|1[01]\\d|[1-9]?\\d)(?!\\d)`
+      + `|\\[${IPV6}\\]:${PORT}(?!\\d)`,
+    example: '192.168.1.0/24、10.0.0.1:8080、2001:db8::/32、[2001:db8::1]:443',
     enabled: true,
-    validate: personalUrlLength,
+    validate: ipNetValid,
   },
 ];

@@ -105,10 +105,11 @@ function renderGroup(root             , config               , group            
   const box = el('details', { class: 'rule-group', 'data-group': group.id, open: !ui.closedGroups.has(group.id) && (group.id !== 'custom' || patterns.length > 0) })                      ;
   box.addEventListener('toggle', () => (box.open ? ui.closedGroups.delete(group.id) : ui.closedGroups.add(group.id)));
   box.append(
+    // jill_deid patch (PATCHES.md P1-15): the toggle is not inside <summary> (nested-interactive); CSS lays it over the head row
     el('summary', { class: 'rule-group-head' },
       el('span', { class: 'rule-group-title' }, `${group.title}（${patterns.length}）`),
-      el('label', { class: 'group-toggle-label muted small' }, all, ' 全部啟用'),
     ),
+    el('label', { class: 'group-toggle-label muted small' }, all, ' 全部啟用'),
     patterns.length === 0
       ? el('p', { class: 'muted small rule-empty' }, '尚無自訂規則。按「＋ 新增自訂規則」可以用正規表達式新增，例如員工編號、病歷號碼。')
       : el('div', { class: 'rule-list' }, ...patterns.flatMap((p) => renderRule(root, config, p))),
@@ -276,7 +277,7 @@ function renderUrlTester(patterns) {
     clear(out);
     const uri = input.value.trim();
     if (!uri) return;
-    const { page, parts } = explainUri(uri, patterns);
+    const { parts } = explainUri(uri, patterns);
     const d = scanUri(uri, patterns, new CodeBook());
     const decoded = (u) => {
       try {
@@ -287,9 +288,7 @@ function renderUrlTester(patterns) {
     };
     const outcome = d.action === 'rewrite' ? decoded(d.uri) : d.action === 'strip' ? '（移除連結）' : '（沒有命中，原樣保留）';
     out.append(
-      page.length
-        ? el('p', { class: 'small' }, `整條命中「個人頁網址」：${page.map((h) => h.text).join('、')}`)
-        : el('div', { class: 'table-wrap' }, el('table', { class: 'table url-test-table' },
+      el('div', { class: 'table-wrap' }, el('table', { class: 'table url-test-table' },
             el('thead', {}, el('tr', {}, el('th', {}, '部分'), el('th', {}, '原始'), el('th', {}, '解碼後'), el('th', {}, '命中'))),
             el('tbody', {}, ...parts.map((x) => el('tr', { class: x.hits.length ? 'url-test-hit' : '' },
               el('td', {}, PART_LABELS[x.kind] ?? x.kind),

@@ -1,7 +1,6 @@
 // Phase 3b-5: restore core (spec §5.3, H12) and PDF links (spec §5.5 PDF, H14).
 import { describe, expect, it } from './runner.js';
 import { parseMapping } from '../../assets/js/upstream/core/csv.js';
-import { setPersonalHosts } from '../../assets/js/upstream/core/patterns.js';
 import { generateDocument, parseDocument } from '../../assets/js/upstream/formats/index.js';
 import { restoreDocument } from '../../assets/js/jill/links/restore.js';
 import { PDFDocument, PDFName, PDFRawStream, PDFString, StandardFonts, decodePDFRawStream } from '../../assets/vendor/pdf-lib.esm.min.js';
@@ -19,25 +18,23 @@ const fixture = async (name) => new File([await (await fetch(`fixtures/${name}`)
 const targets = (doc) => (doc.links ?? []).map((l) => l.uri);
 
 describe('restore core (spec §5.3, H12)', () => {
-  setPersonalHosts(['facebook.com']);
 
   it('H12 Markdown: H1–H3, H10, H13, H17 links and their text come back byte for byte', async () => {
     const text = [
       '[信箱](mailto:wang.xm@school.edu.tw "寫信給王小明")', // H1
       '[電話](tel:0912-345-678)', // H2
       '[查詢](https://school.edu.tw/s?id=A123456789&name=%E7%8E%8B%E5%B0%8F%E6%98%8E)', // H3
-      '[個人頁](https://www.facebook.com/wang.xiaoming)', // H10
+      '[紀錄](https://school.edu.tw/log?net=192.168.1.0%2F24&at=10.0.0.1%3A8080)', // H10
       '[舊系統](https://school.edu.tw/s?name=%E7%8E&x=1)', // H13
       '[成績](https://school.edu.tw/q?sid=112001&other=112001)', // H17
       '導師王小明，身分證 A123456789。',
     ].join('\n');
     const { r, out, csv } = await deidentify(new File([text], 'h12.md'));
-    for (const leak of ['wang.xm', '345-678', 'A123456789', '%E5%B0%8F', 'wang.xiaoming', '%E7%8E&', '112001&']) expect(r.redactedText).not.toContain(leak);
+    for (const leak of ['wang.xm', '345-678', 'A123456789', '%E5%B0%8F', '1.0%2F24', '0.1%3A8080', '%E7%8E&', '112001&']) expect(r.redactedText).not.toContain(leak);
     const { errors, r: back, restored } = await restoreFile(out, csv);
     expect(errors).toEqual([]);
     expect(back.missingCodes).toEqual([]);
     expect(restored.text).toBe(text);
-    expect(restored.text).not.toContain('%2F'); // H10: the page path stays a path
   });
 
   it('H12 DOCX made by Word: text, targets and ScreenTips restored', async () => {

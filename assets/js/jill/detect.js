@@ -6,7 +6,6 @@
 // The worker lives as long as the page: a new one would fetch its modules again, which fails offline under the
 // no-cache policy (spec §4, §9.1). If it cannot be (re)started, the remaining rules count as skipped.
 import { resolveOverlaps, scanPattern, toItems } from '../upstream/core/detector.js';
-import { getPersonalHosts } from '../upstream/core/patterns.js';
 import { columnCandidates } from './columns.js';
 import { brokenTextCandidates, encodedTextCandidates } from './uri-scan.js';
 import { outsideLinks, textLinks } from './links/markdown.js';
@@ -66,7 +65,7 @@ function scanOnce(text, rules, watchdogMs) {
           finish();
         }
       };
-      worker.postMessage({ type: 'detect', text, rules: todo, hosts: getPersonalHosts() });
+      worker.postMessage({ type: 'detect', text, rules: todo });
     };
     start();
   });

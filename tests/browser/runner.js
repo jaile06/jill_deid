@@ -30,7 +30,9 @@ export function expect(actual) {
 
 /** Runs every queued test; the page title becomes PASS or FAIL n so headless runs can read it. */
 export async function run() {
+  // held from the start: a test that empties document.body (upstream UI tests do) must not lose the report
   const list = document.getElementById('results');
+  const summary = document.getElementById('summary');
   let failed = 0;
   for (const t of queue) {
     const li = document.createElement('li');
@@ -44,6 +46,7 @@ export async function run() {
     }
     list.append(li);
   }
-  document.getElementById('summary').textContent = `${queue.length - failed}/${queue.length} passed`;
+  if (!summary.isConnected || !list.isConnected) document.body.prepend(summary, list);
+  summary.textContent = `${queue.length - failed}/${queue.length} passed`;
   document.title = failed ? `FAIL ${failed}` : 'PASS';
 }

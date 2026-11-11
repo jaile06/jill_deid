@@ -1,6 +1,6 @@
 // Phase 3b-2: link targets in Markdown and pasted text (spec §5.5, H9).
 import { describe, expect, it } from './runner.js';
-import { BUILTIN_PATTERNS, setPersonalHosts } from '../../assets/js/upstream/core/patterns.js';
+import { BUILTIN_PATTERNS } from '../../assets/js/upstream/core/patterns.js';
 import { CodeBook } from '../../assets/js/upstream/core/codes.js';
 import { addManualItem, resplitItems } from '../../assets/js/upstream/core/detector.js';
 import { restore } from '../../assets/js/upstream/core/restorer.js';
@@ -8,7 +8,6 @@ import { detectDocument } from '../../assets/js/jill/detect.js';
 import { scanUri } from '../../assets/js/jill/uri-scan.js';
 import { markdownLinks, redactWithLinks, textLinks } from '../../assets/js/jill/links/markdown.js';
 
-setPersonalHosts(['facebook.com']);
 const C = '[0-9a-f]{6}';
 const ID = '%5B%E8%BA%AB%E5%88%86%E8%AD%89%3A'; // encodeURIComponent('[身分證:')
 const matches = (s, re) => expect(re.test(s) ? 'match' : s).toBe('match');
@@ -55,8 +54,8 @@ describe('Markdown links (spec §5.5)', () => {
   });
 
   it('autolinks and bare URLs stay in the text layer (spec §5.3)', async () => {
-    const { redactedText } = await run('<https://www.facebook.com/wang.xiaoming> 與 https://x.tw/?id=A123456789');
-    matches(redactedText, new RegExp(`^<https://www\\.facebook\\.com/\\[網址:${C}\\]> 與 https://x\\.tw/\\?id=A1\\[身分證:${C}\\]$`));
+    const { redactedText } = await run('<http://10.0.0.1:8080/s> 與 https://x.tw/?id=A123456789');
+    matches(redactedText, new RegExp(`^<http://10\\.0\\.\\[IP:${C}\\]/s> 與 https://x\\.tw/\\?id=A1\\[身分證:${C}\\]$`));
   });
 
   it('strip_link keeps only the text of an inline link and drops a definition', async () => {

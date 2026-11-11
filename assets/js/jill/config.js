@@ -1,6 +1,6 @@
 // Settings from PHP (spec §7), read once from the page. A missing or broken block leaves the page usable
 // without organisation rules and presets (spec §7), with a console warning.
-const EMPTY = { version: 1, orgRules: [], presets: [], urlPersonalHosts: [], columnLabels: {} };
+const EMPTY = { version: 1, orgRules: [], presets: [], columnLabels: {} };
 
 function read() {
   const node = typeof document === 'undefined' ? null : document.getElementById('jill-deid-config');

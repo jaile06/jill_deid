@@ -1,7 +1,6 @@
 // Phase 4c: the restore page puts back link targets and link texts too (spec §5.3, H12 through the interface).
 // A page of its own: the restore view keeps its document and table in module state.
 import { describe, expect, it } from './runner.js';
-import { setPersonalHosts } from '../../assets/js/upstream/core/patterns.js';
 import { parseDocument } from '../../assets/js/upstream/formats/index.js';
 import { createRestoreView } from '../../assets/js/upstream/ui/restore-view.js';
 import { deidentify } from './helpers.js';
@@ -11,7 +10,6 @@ const until = async (ok, ms = 30000) => {
     if (performance.now() - t0 > ms) throw new Error('timed out');
   }
 };
-setPersonalHosts(['facebook.com']);
 const host = document.createElement('div');
 host.id = 'jill-deid-app';
 document.body.append(host);
@@ -55,7 +53,7 @@ describe('restore page with links (spec §5.3, H12)', () => {
     await until(() => host.querySelector('.restore-result'));
     expect(host.querySelector('.restore-result .toolbar').textContent).not.toContain('無法還原');
     const list = host.querySelector('.restored-links').textContent;
-    for (const u of ['mailto:wang.xm@school.edu.tw', 'https://www.facebook.com/wang.xiaoming', 'name=王小明']) expect(list).toContain(u);
+    for (const u of ['mailto:wang.xm@school.edu.tw', 'name=王小明']) expect(list).toContain(u);
     expect(list).toContain('文字：聯絡王小明');
     downloads.length = 0;
     [...host.querySelectorAll('button')].find((b) => b.textContent === '下載還原文件').click();

@@ -1,7 +1,7 @@
 // Phase 3b-4: XLSX link targets, HYPERLINK formulas, comments and residue (spec §5.5 XLSX, H8).
 import { describe, expect, it } from './runner.js';
 import { generateXlsx, parseXlsx } from '../../assets/js/upstream/formats/xlsx.js';
-import { BUILTIN_PATTERNS, setPersonalHosts } from '../../assets/js/upstream/core/patterns.js';
+import { BUILTIN_PATTERNS } from '../../assets/js/upstream/core/patterns.js';
 import { CodeBook } from '../../assets/js/upstream/core/codes.js';
 import { resplitItems } from '../../assets/js/upstream/core/detector.js';
 import { detectShort } from '../../assets/js/jill/detect.js';
@@ -154,10 +154,9 @@ describe('XLSX comments and residue (spec §5.5 XLSX 3–4)', () => {
 
 describe('XLSX fixture made by Office, URLs rewritten (not stripped)', () => {
   it('links.xlsx (tools/make-links-xlsx.ps1): nothing remains in any form', async () => {
-    setPersonalHosts(['facebook.com']);
     const fixture = new File([await (await fetch('fixtures/links.xlsx')).blob()], 'links.xlsx');
     const { zip, r } = await processXlsx(fixture);
     expect(r.links.every((l) => l.decision.action !== 'strip')).toBe(true);
-    expect(await leaks(zip, ['A123456789', '小明', 'wang.xm', 'wang.xiaoming', 'chen.ml', '林志明', '測試作者'])).toEqual([]);
+    expect(await leaks(zip, ['A123456789', '小明', 'wang.xm', 'chen.ml', '林志明', '測試作者'])).toEqual([]);
   });
 });

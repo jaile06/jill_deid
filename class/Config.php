@@ -59,7 +59,6 @@ class Config
             'assetsBase'       => XOOPS_URL . '/modules/jill_deid/assets/',
             'orgRules'         => $orgRules,
             'presets'          => $presets,
-            'urlPersonalHosts' => $lines((string) ($xoopsModuleConfig['url_personal_hosts'] ?? '')),
             'columnLabels'     => $labels ?: new \stdClass(),
         ];
     }
