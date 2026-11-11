@@ -141,7 +141,7 @@ async function runTheme(theme) {
     await chooseFiles(FIRST);
     await waitFor(`${fileCount} === ${FIRST.length} && ${idle}`, 300000, 'the first batch (OCR included)');
     const files = await evaluate(`[...document.querySelectorAll('#jill-deid-app .file-item')].map((li) => li.textContent.replace(/\\s+/g, ' ').trim())`);
-    const a11y = await checkA11y(evaluate); // spec §9.4, every tab with the workspace filled
+    const a11y = await checkA11y(evaluate, send); // spec §9.4, every tab with the workspace filled
 
     await evaluate(`[...document.querySelectorAll('#jill-deid-app button')].find((b) => b.textContent.startsWith('打包下載全部')).click()`);
     for (let i = 0; i < 40 && !readdirSync(join(dir, 'downloads')).some((f) => f.endsWith('.zip')); i++) await sleep(500);

@@ -10,7 +10,7 @@
 :is(#jill-deid-app, #jill-deid-portal) .mark { color: inherit; }
 /* Module additions to the upstream interface (spec §6.1 新增 3, 7): the 🔗 after a link, its details, column batch. */
 :is(#jill-deid-app, #jill-deid-portal) .link-flag { border: 0; background: none; padding: 0 .15em; margin: 0; cursor: pointer; font: inherit; line-height: 1; }
-:is(#jill-deid-app, #jill-deid-portal) .link-flag:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
+:is(#jill-deid-app, #jill-deid-portal) .link-flag:focus-visible { outline: 2px solid currentColor !important; outline-offset: 1px; }
 :is(#jill-deid-app, #jill-deid-portal) .link-detail { display: grid; gap: .3rem; }
 :is(#jill-deid-app, #jill-deid-portal) .link-uri { overflow-wrap: anywhere; }
 :is(#jill-deid-app, #jill-deid-portal) .link-popup { max-width: min(36rem, calc(100vw - 16px)); }
@@ -39,3 +39,5 @@
 /* workspace headings are h4 (P1-15); keep upstream's h5 look */
 :is(#jill-deid-app, #jill-deid-portal) :is(.file-panel-head, .preview-head, .sidebar) > h4 { font-size: 1rem; }
 :is(#jill-deid-app, #jill-deid-portal) .preview-head > h4 { margin: 0; }
+/* Keyboard focus (spec §9.4): xbootstrap5 reset.css has * { outline: 0 !important } */
+:is(#jill-deid-app, #jill-deid-portal) :focus-visible { outline: 2px solid var(--primary) !important; outline-offset: 2px; }
