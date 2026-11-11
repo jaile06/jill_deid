@@ -141,6 +141,17 @@ async function runTheme(theme) {
     await chooseFiles(FIRST);
     await waitFor(`${fileCount} === ${FIRST.length} && ${idle}`, 300000, 'the first batch (OCR included)');
     const files = await evaluate(`[...document.querySelectorAll('#jill-deid-app .file-item')].map((li) => li.textContent.replace(/\\s+/g, ' ').trim())`);
+    // layout: each file's preview fills its panel, a PDF page as wide as the preview (a theme or module rule that
+    // shrinks .preview, as `[tabindex="0"] { display: inline-flex }` once did, leaves a thumbnail-sized page)
+    const layout = [];
+    for (let i = 0; i < files.length; i++) {
+      await evaluate(`document.querySelectorAll('#jill-deid-app .file-item-main')[${i}].click()`);
+      await sleep(800);
+      const m = await evaluate(`(() => { const p = document.querySelector('#jill-deid-app .preview'); const pg = p.querySelector('.pdf-page');
+        return { name: document.querySelectorAll('#jill-deid-app .file-item-main')[${i}].textContent.split(/\\s/)[0], preview: p.getBoundingClientRect().width,
+          panel: p.parentElement.getBoundingClientRect().width, page: pg ? pg.getBoundingClientRect().width : null }; })()`);
+      if (m.preview < m.panel * 0.8 || (m.page !== null && m.page < m.preview * 0.8)) layout.push(`${m.name}: preview ${Math.round(m.preview)} of ${Math.round(m.panel)} px${m.page === null ? '' : `, page ${Math.round(m.page)} px`}`);
+    }
     const a11y = await checkA11y(evaluate, send); // spec §9.4, every tab with the workspace filled
 
     await evaluate(`[...document.querySelectorAll('#jill-deid-app button')].find((b) => b.textContent.startsWith('打包下載全部')).click()`);
@@ -224,12 +235,14 @@ async function runTheme(theme) {
 
     ws.close();
     const rosterOk = files.some((f) => f.startsWith('roster.xlsx') && f.includes('12 / 12'));
-    const ok = restoreOk && a11y.length === 0 && rosterOk && linksOk && shownTheme === theme && !translate && files.length === FIRST.length && !!zip && offlineOk && harOk && problems.length === 0;
+    const ok = layout.length === 0 && restoreOk && a11y.length === 0 && rosterOk && linksOk && shownTheme === theme && !translate && files.length === FIRST.length && !!zip && offlineOk && harOk && problems.length === 0;
     console.log([
       `== ${theme}: ${ok ? 'PASS' : 'FAIL'}`,
       `theme in page: ${shownTheme}; translate widget: ${translate ? 'PRESENT' : 'none'}`,
       ...files.map((f) => `  ${f}`),
       `roster column detection: ${rosterOk ? 'ok' : 'FAILED'}`,
+      `preview layout: ${layout.length ? 'FAILED' : 'ok'}`,
+      ...layout.map((l) => `  layout: ${l}`),
       `accessibility (spec §9.4): ${a11y.length ? 'FAILED' : 'ok'}`,
       ...a11y.map((p) => `  a11y: ${p}`),
       `link fixtures (md, docx, xlsx): ${linksOk ? 'ok' : `FAILED ${linkLeaks.join(', ') || 'output missing or Office failed'}`}`,
