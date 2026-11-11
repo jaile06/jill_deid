@@ -818,7 +818,7 @@ Fixture 優先沿用上游 `tests/helpers/docx-builder.ts`、`xlsx-builder.ts` �
 - [x] 前後台模組內容皆無 `<h1>`、`<h2>`，從 `<h3>` 起且層級不跳階。（Phase 5：前台由 `tools/a11y.mjs` 逐分頁檢查；後台樣板 h3→h4，`tests/eall_test.php` 渲染的後台頁面無 h1、h2）
 - [x] `*.php`（語言檔除外）、`*.tpl`、`assets/js/jill/**/*.js` 無硬寫中文（上游 `ui/` 依 §4 i18n 例外）；`assets/js/jill/` 與樣板無 `innerHTML`；`assets/css/upstream.css`、`jill_deid.css` 每條規則都在範圍內（`ui.test.js`）。
 - [x] 互動元件 ≥ 44×44 px、文字對比 ≥ 4.5:1、純圖示按鈕有 `visually-hidden` 文字。（Phase 4d／5：`tools/a11y.mjs`，e2e 兩個佈景；P1-15、P1-16）
-- [ ] 鍵盤可完成整個流程；axe DevTools 0 個 serious／critical。（Phase 5：axe 0 個、Enter 切換分頁、Tab 走到每個元件且有焦點框，由 `tools/a11y.mjs` 自動檢查；以鍵盤開啟檔案選擇視窗與空白狀態的選檔區待手動確認）
+- [x] 鍵盤可完成整個流程；axe DevTools 0 個 serious／critical。（Phase 5：axe 0 個、Enter 切換分頁、Tab 走到每個元件且有焦點框，由 `tools/a11y.mjs` 自動檢查；以鍵盤開啟檔案選擇視窗（去識別化頁空白狀態、還原頁兩個選檔區）由使用者 2026-11-11 手動確認）
 
 ---
 
