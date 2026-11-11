@@ -58,5 +58,6 @@
 - （Phase 4d）**headless 的焦點檢查要先 `Emulation.setFocusEmulationEnabled`**：頁面沒有焦點時 `:focus-visible` 永不成立，兩個佈景都會「看起來」一樣。xbootstrap5 的 `reset.css` 有 `* { outline: 0 !important }`，本模組的 `:focus-visible` 要 `!important`；佈景的 `a { transition }` 讓焦點框延遲出現，讀樣式前要等 transition。收合的 `<details>` 內容要用 `checkVisibility()` 判斷，`offsetParent` 會誤判可見。
 - （Phase 5）**除錯模式關閉時 XOOPS 會 `error_reporting(0)` 並換上 `XoopsErrorHandler`**：網頁、Apache 記錄都看不到 PHP 訊息，在 `mainfile.php` 之前設的處理器也會被蓋掉（`admin_db_test` 的「no PHP warnings」從 Phase 2 起都是空檢查）。要驗 E_ALL 一律載入 XOOPS 後再設，且要有對照組（xbootstrap5 的 TadTools 警告）證明抓得到；處理器要尊重 `@`（`error_reporting() & $no`）。`release_date` 要寫 `2026/11/11`，`-` 會讓 moduleadmin 的關於頁出警告。
 - （Phase 5）**改站台設定做測試，原值要另外記下、用另一支程式寫回並重新查詢確認**：暫存原值的檔案曾存成改過的值，還原寫回錯的值（已手動寫回）。XOOPS session 綁定來源 IP，CLI 建的 session 要連 `127.0.0.1`（`localhost` 在 Windows 走 `::1`）；清理 session 時只刪自己的 `sess_id`，不要用條件批次刪，以免刪到使用者的登入。
+- （Phase 5 後）**用屬性選擇器套版面規則會誤中容器**：為 44×44 寫的 `[tabindex="0"] { display: inline-flex }` 也套到可聚焦的 `div.preview`，預覽縮成內容寬，PDF 頁面只剩約 85px（使用者看成「只有縮圖」），Word／Excel 預覽也只剩一半。尺寸規則只指名元件類別或 `span[...]`；e2e 的「preview layout」逐檔檢查預覽寬度。
 - （Phase 5）每個佈景都可能把顏色蓋進模組：xswatch5 把 h1–h6 設成淺藍，對比 2.6:1。新佈景一律跑 e2e 的 a11y。
 - （Phase 4a）e2e 的「水平捲動」要先找是誰撐寬：school2022 的選單本身就超出 1280 寬，與本模組無關；檢查限定在 `#jill-deid-app` 內。
