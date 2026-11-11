@@ -13,14 +13,16 @@ $root = dirname(__DIR__, 3);
 $_SERVER += ['HTTP_HOST' => 'localhost', 'SERVER_NAME' => 'localhost', 'SERVER_PORT' => '80', 'REMOTE_ADDR' => '127.0.0.1', 'HTTP_USER_AGENT' => 'cli',
     'REQUEST_URI' => '/cli.php', 'SCRIPT_NAME' => '/cli.php', 'PHP_SELF' => '/cli.php', 'REQUEST_METHOD' => 'POST'];
 chdir(sys_get_temp_dir()); // common.php 以工作目錄判斷是否在模組內 // xoops-lint-ignore: test data
+require "{$root}/mainfile.php";
+// 載入後才設：除錯模式關閉時 common.php 會 error_reporting(0)，並換上 XoopsErrorHandler
 $problems = [];
+error_reporting(E_ALL);
 set_error_handler(static function (int $no, string $msg, string $file, int $line) use (&$problems): bool {
-    if (str_contains(str_replace('\\', '/', $file), '/modules/jill_deid/')) {
+    if ((error_reporting() & $no) && str_contains(str_replace('\\', '/', $file), '/modules/jill_deid/')) { // @ 抑制者不算
         $problems[] = "{$msg} @ {$file}:{$line}";
     }
     return false;
 });
-require "{$root}/mainfile.php";
 
 $fail  = 0;
 $check = static function (string $name, bool $ok) use (&$fail): void {

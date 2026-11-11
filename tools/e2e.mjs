@@ -2,7 +2,7 @@
 // Usage: node tools/e2e.mjs [theme ...]          (default: school2022 xbootstrap5; Node >= 22 for WebSocket)
 //   JILL_DEID_SITE  site root, default http://localhost
 // Per theme: switch theme; choose the upstream samples (5 formats + scanned PDF via OCR) in the module page;
-// download the batch ZIP; go offline and process a second PDF; then write <tmp>/jill_deid_e2e/<theme>.har
+// download the batch ZIP; go offline, process a second PDF and restore a Word file with its mapping; then write <tmp>/jill_deid_e2e/<theme>.har
 // and run tools/check-har.php with the originals of assets/samples/contract.mapping.csv.
 // Dev tool; excluded from release by .gitattributes.
 import { spawn, execFileSync } from 'node:child_process';
@@ -185,6 +185,30 @@ async function runTheme(theme) {
     const offlineOk = await evaluate(`${fileCount} === ${expected}`);
     const offlineError = await evaluate(`[...document.querySelectorAll('#jill-deid-portal .toast-error')].map((t) => t.textContent).join(' | ')`);
 
+    // still offline (spec §9.1): restore contract.deid.docx from this run's archive with its mapping table
+    let restoreOk = false;
+    let restoreNote = '';
+    try {
+      execFileSync(TAR, ['-xf', join(dir, 'downloads', zip), '-C', out, 'contract.deid.docx', 'contract.mapping.csv']);
+      await evaluate(`document.querySelector('#jill-deid-app .tabs [data-tab="restore"]').click()`);
+      await waitFor(`document.querySelectorAll('#jill-deid-app .restore-view input[type=file]').length === 2`, 10000, 'the restore page');
+      // a filled slot turns into a chip, so pick each input by what it accepts
+      for (const [sel, f] of [['input[type=file]:not([accept^=".csv"])', 'contract.deid.docx'], ['input[type=file][accept^=".csv"]', 'contract.mapping.csv']]) {
+        const { result } = await send('Runtime.evaluate', { expression: `document.querySelector('#jill-deid-app .restore-view ${sel}')` });
+        const r = await send('DOM.setFileInputFiles', { files: [join(out, f)], objectId: result.objectId });
+        if (r.error) throw new Error(`restore ${f}: ${r.error.message}`);
+        await sleep(1500);
+      }
+      await waitFor(`!!document.querySelector('#jill-deid-app .restore-result')`, 30000, 'the offline restore');
+      const shown = await evaluate(`document.querySelector('#jill-deid-app .restore-result').textContent`);
+      const original = mappingValues(join(out, 'contract.mapping.csv'));
+      const back = original.filter((v) => shown.includes(v)).length;
+      restoreOk = !shown.includes('無法還原') && back > 0;
+      restoreNote = `${back} / ${original.length} originals shown`;
+    } catch (e) {
+      restoreNote = e.message;
+    }
+
     const har = join(dir, `${theme}.har`);
     writeFileSync(har, JSON.stringify({ log: { version: '1.2', creator: { name: 'jill_deid e2e', version: '1' }, entries: requests } }));
     const values = join(dir, 'values.txt');
@@ -200,7 +224,7 @@ async function runTheme(theme) {
 
     ws.close();
     const rosterOk = files.some((f) => f.startsWith('roster.xlsx') && f.includes('12 / 12'));
-    const ok = a11y.length === 0 && rosterOk && linksOk && shownTheme === theme && !translate && files.length === FIRST.length && !!zip && offlineOk && harOk && problems.length === 0;
+    const ok = restoreOk && a11y.length === 0 && rosterOk && linksOk && shownTheme === theme && !translate && files.length === FIRST.length && !!zip && offlineOk && harOk && problems.length === 0;
     console.log([
       `== ${theme}: ${ok ? 'PASS' : 'FAIL'}`,
       `theme in page: ${shownTheme}; translate widget: ${translate ? 'PRESENT' : 'none'}`,
@@ -212,6 +236,7 @@ async function runTheme(theme) {
       ...wordReport.split(/\r?\n/).map((l) => `  office: ${l.trim()}`),
       `zip: ${zip ? `${zip} (${statSync(join(dir, 'downloads', zip)).size} bytes)` : 'MISSING'}`,
       `offline second PDF: ${offlineOk ? 'ok' : `FAILED ${offlineError}`}`,
+      `offline restore (contract.docx): ${restoreOk ? 'ok' : 'FAILED'} ${restoreNote}`,
       harReport.trim(),
       ...problems.map((p) => `  ${p}`),
     ].join('\n'));

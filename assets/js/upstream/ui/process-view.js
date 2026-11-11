@@ -263,7 +263,9 @@ function placeLinkButtons(preview, d, entries, refresh, root) {
   const inline = ['md', 'txt', 'docx'].includes(d.doc.format);
   return entries.filter((entry) => {
     if (!inline || !entry.link.displayRange) return true;
-    const b = el('button', { type: 'button', class: 'link-flag', 'aria-label': '這個連結含個資：檢視與處理', title: '這個連結含個資：檢視與處理' }, '🔗');
+    // jill_deid patch (PATCHES.md P1-16): icon-only button, its name as visually-hidden text (spec §9.4)
+    const b = el('button', { type: 'button', class: 'link-flag', title: '這個連結含個資：檢視與處理' },
+      el('span', { 'aria-hidden': 'true' }, '🔗'), el('span', { class: 'visually-hidden' }, '這個連結含個資：檢視與處理'));
     b.addEventListener('click', (e) => {
       e.stopPropagation();
       showLinkPopup(b, d, entry, refresh, root);
@@ -672,7 +674,9 @@ function renderFilePanel(root             )              {
             isDownloaded(d) ? el('span', { class: 'tag tag-done' }, '已下載') : null,
           ),
         ),
-        el('button', { type: 'button', class: 'file-item-remove', title: '移除此檔案', onClick: () => removeDoc(i, root) }, '×'),
+        // jill_deid patch (PATCHES.md P1-16): icon-only button, its name as visually-hidden text (spec §9.4)
+        el('button', { type: 'button', class: 'file-item-remove', title: '移除此檔案', onClick: () => removeDoc(i, root) },
+          el('span', { 'aria-hidden': 'true' }, '×'), el('span', { class: 'visually-hidden' }, '移除此檔案')),
       ),
     );
   });
